@@ -2,13 +2,17 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://script.google.com https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Teleflex SO — Salud Ocupacional</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Inter font fallback — no external request needed */
+body, input, select, textarea, button {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, Helvetica, Arial, sans-serif !important;
+}
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -1767,7 +1771,8 @@ function renderDash(){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}}}}});
   const meses=[...new Set(data.map(r=>r.mes||'').filter(Boolean))];
   const mp=document.getElementById('mpills');
-  mp.innerHTML=meses.length?meses.map((m,i)=>`<div class="mpill${i===0?' active':''}" onclick="selMes('${m}',this)">${m}</div>`).join(''):'<span style="font-size:11px;color:var(--text3)">Sin datos</span>';
+  if(!mp) return;
+  mp.innerHTML =meses.length?meses.map((m,i)=>`<div class="mpill${i===0?' active':''}" onclick="selMes('${m}',this)">${m}</div>`).join(''):'<span style="font-size:11px;color:var(--text3)">Sin datos</span>';
   if(meses.length) renderMesDet(meses[0],data);
 }
 
@@ -1795,6 +1800,7 @@ function renderMesDet(mes,data){
 function buildMesFil(){
   const meses=[...new Set(registros.map(r=>r.mes||'').filter(Boolean))];
   const s=document.getElementById('fil-mes');
+  if(!s) return;
   s.innerHTML='<option value="">Todos los meses</option>'+meses.map(m=>`<option value="${m}">${m}</option>`).join('');
 }
 
