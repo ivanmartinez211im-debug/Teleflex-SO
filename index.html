@@ -465,17 +465,42 @@ tr:hover td{background:var(--surf2)}
 ════════════════════════════════════════ -->
 <div class="sc" id="sc-inc">
   <div class="sh">
-    <div><h2>Incapacidades</h2><p>Registro y seguimiento</p></div>
+    <div><h2>Incapacidades</h2><p>Captura, seguimiento y reporte</p></div>
+    <button class="btn btn-teal btn-sm" onclick="openModal('mo-inc')">+ Nueva incapacidad</button>
   </div>
+
+  <!-- KPIs rápidos -->
+  <div class="kpis" id="inc-kpis" style="margin-bottom:12px">
+    <div class="kpi red"><div class="kv" id="ik-activas">0</div><div class="kl">Activas hoy</div></div>
+    <div class="kpi amber"><div class="kv" id="ik-mes">0</div><div class="kl">Este mes</div></div>
+    <div class="kpi"><div class="kv" id="ik-dias">0</div><div class="kl">Días totales</div></div>
+    <div class="kpi teal"><div class="kv" id="ik-reincorp">0</div><div class="kl">Por reincorporar (7 días)</div></div>
+  </div>
+
+  <!-- Tabs: activas / historial -->
+  <div class="tabs">
+    <button class="tab active" onclick="incTab('activas',this)">🟢 Activas</button>
+    <button class="tab" onclick="incTab('proximas',this)">⏰ Próxima reincorporación</button>
+    <button class="tab" onclick="incTab('historial',this)">📋 Historial completo</button>
+  </div>
+
   <div class="filters">
     <div class="sw" style="flex:1;min-width:170px">
       <span class="si">🔍</span>
-      <input type="text" id="inc-q" placeholder="Nombre, diagnóstico..." oninput="renderInc()">
+      <input type="text" id="inc-q" placeholder="Nombre, No. empleado..." oninput="renderInc()">
     </div>
     <select id="inc-planta" onchange="renderInc()">
       <option value="">Todas las plantas</option>
       <option>Américas</option><option>Barrancas</option><option>Cantera</option><option>Juventud</option>
     </select>
+    <select id="inc-tipo-f" onchange="renderInc()">
+      <option value="">Todos los tipos</option>
+      <option>Enfermedad general</option>
+      <option>Riesgo de trabajo</option>
+      <option>Riesgo de trayecto</option>
+      <option>Maternidad</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" onclick="exportInc()">📊 Excel</button>
   </div>
   <div id="inc-list"></div>
 </div>
@@ -621,6 +646,92 @@ tr:hover td{background:var(--surf2)}
   </div>
 </div>
 
+<!-- ══ MODAL INCAPACIDAD ══ -->
+<div class="ov" id="mo-inc">
+  <div class="mo" style="max-width:540px">
+    <div class="mh"><div class="mt-modal" id="inc-mo-title">Nueva Incapacidad</div><button class="mc" onclick="closeModal('mo-inc')">✕</button></div>
+    <div class="mb">
+      <!-- Buscador empleado -->
+      <div class="fi">
+        <label>No. Empleado *</label>
+        <div class="sw">
+          <span class="si">🔍</span>
+          <input type="text" id="inc-noemp" placeholder="Número de empleado..." oninput="buscarEmpInc(this.value)" autocomplete="off">
+          <div class="sr-drop" id="inc-emp-drop"></div>
+        </div>
+      </div>
+      <!-- Card empleado -->
+      <div id="inc-emp-card" style="display:none;margin-bottom:12px"></div>
+      <!-- Campos ocultos -->
+      <input type="hidden" id="inc-nombre-h">
+      <input type="hidden" id="inc-planta-h">
+      <input type="hidden" id="inc-turno-h">
+      <input type="hidden" id="inc-depto-h">
+      <input type="hidden" id="inc-puesto-h">
+      <input type="hidden" id="inc-nss-h">
+      <!-- Datos de la incapacidad -->
+      <div class="g2">
+        <div class="fi" style="margin:0">
+          <label>Tipo de incapacidad *</label>
+          <select id="inc-tipo">
+            <option value="">— Seleccionar —</option>
+            <option>Enfermedad general</option>
+            <option>Riesgo de trabajo</option>
+            <option>Riesgo de trayecto</option>
+            <option>Maternidad</option>
+          </select>
+        </div>
+        <div class="fi" style="margin:0">
+          <label>No. de incapacidad IMSS</label>
+          <input type="text" id="inc-num-imss" placeholder="Folio IMSS (opcional)">
+        </div>
+      </div>
+      <div class="g3" style="margin-top:10px">
+        <div class="fi" style="margin:0">
+          <label>Fecha inicio *</label>
+          <input type="date" id="inc-inicio" onchange="calcDiasInc()">
+        </div>
+        <div class="fi" style="margin:0">
+          <label>Días *</label>
+          <input type="number" id="inc-dias" min="1" placeholder="0" oninput="calcFechaFinInc()">
+        </div>
+        <div class="fi" style="margin:0">
+          <label>Fecha fin</label>
+          <input type="date" id="inc-fin" onchange="calcDiasInc()" style="background:var(--surf3)">
+        </div>
+      </div>
+      <div class="fi" style="margin-top:10px">
+        <label>Diagnóstico *</label>
+        <input type="text" id="inc-dx" placeholder="Diagnóstico principal">
+      </div>
+      <div class="g2" style="margin-top:0">
+        <div class="fi" style="margin:0">
+          <label>Médico que expide</label>
+          <input type="text" id="inc-medico-exp" placeholder="Nombre del médico">
+        </div>
+        <div class="fi" style="margin:0">
+          <label>Institución</label>
+          <select id="inc-institucion">
+            <option>IMSS</option><option>ISSSTE</option><option>Particular</option><option>Teleflex SO</option>
+          </select>
+        </div>
+      </div>
+      <div class="fi">
+        <label>Notas adicionales</label>
+        <textarea id="inc-notas" rows="2" placeholder="Observaciones..."></textarea>
+      </div>
+      <!-- Resumen calculado -->
+      <div id="inc-resumen" style="display:none;background:var(--teal4);border:1.5px solid var(--teal3);border-radius:8px;padding:10px 13px;font-size:12px;color:var(--teal)">
+        <strong>📅 Período:</strong> <span id="inc-resumen-txt"></span>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('mo-inc')">Cancelar</button>
+      <button class="btn btn-teal" onclick="guardarInc()">💾 Guardar incapacidad</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 </div><!-- /app -->
@@ -631,7 +742,7 @@ tr:hover td{background:var(--surf2)}
 // CONSTANTS
 // ══════════════════════════════════════════════════════
 const GAS='https://script.google.com/macros/s/AKfycbwQbVvbIJJwpqrXopIUvoTP8w7nu6c6v2XdhtCqsxEtbq5IC8T9Qt9l__p1Pz1ujhsimw/exec';
-const SK={hc:'so_hc8',re:'so_re8',ci:'so_ci8',users:'so_users_med_v1'};
+const SK={hc:'so_hc8',re:'so_re8',ci:'so_ci8',inc:'so_inc_v1',users:'so_users_med_v1'};
 const EMPRESA={nombre:'Teleflex',medico:'Dr. Jaime Iván Martínez Espinoza',cedula:'12021447'};
 const PLANTAS=['Américas','Barrancas','Cantera','Juventud'];
 const TURNOS=['Matutino','Vespertino','Nocturno'];
@@ -655,7 +766,7 @@ const SIS={
 };
 
 // ── Data ──────────────────────────────────────────────
-let HC=[],RE=[],CI=[];
+let HC=[],RE=[],CI=[],INC=[];
 let currentUser=null;
 let tipoActual=null,empActual=null;
 let _editCtx=null;
@@ -724,7 +835,7 @@ function doLogout(){currentUser=null;location.reload();}
 // INIT
 // ══════════════════════════════════════════════════════
 function init(){
-  HC=ld(SK.hc)||[]; RE=ld(SK.re)||[]; CI=ld(SK.ci)||[];
+  HC=ld(SK.hc)||[]; RE=ld(SK.re)||[]; CI=ld(SK.ci)||[]; INC=ld(SK.inc)||[];
   document.getElementById('cons-fecha-hoy').textContent=new Date().toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   updateBadges();
   buildRegMes();
@@ -1150,27 +1261,384 @@ function imprimirReg(id){
 // ══════════════════════════════════════════════════════
 // INCAPACIDADES
 // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// INCAPACIDADES
+// ══════════════════════════════════════════════════════
+var _incTab = 'activas';
+
+function incTab(tab, el){
+  _incTab=tab;
+  document.querySelectorAll('#sc-inc .tab').forEach(b=>b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderInc();
+}
+
+function parseDate(str){
+  if(!str) return null;
+  // Acepta DD/MM/YYYY o YYYY-MM-DD
+  if(str.includes('/')){const p=str.split('/');return new Date(p[2],p[1]-1,p[0]);}
+  return new Date(str+'T12:00');
+}
+
+function incActiva(r){
+  if(!r.incInicio) return false;
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const ini=parseDate(r.incInicio); if(!ini||isNaN(ini)) return false;
+  if(r.incFin){const fin=parseDate(r.incFin);return fin&&!isNaN(fin)&&fin>=hoy;}
+  if(r.incDias){const fin=new Date(ini);fin.setDate(ini.getDate()+(parseInt(r.incDias)||1)-1);return fin>=hoy;}
+  return false;
+}
+
+function diasRestantes(r){
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const ini=parseDate(r.incInicio); if(!ini) return 0;
+  let fin=null;
+  if(r.incFin) fin=parseDate(r.incFin);
+  else if(r.incDias){fin=new Date(ini);fin.setDate(ini.getDate()+(parseInt(r.incDias)||1)-1);}
+  if(!fin) return 0;
+  return Math.max(0,Math.round((fin-hoy)/(1000*60*60*24)));
+}
+
+function updateIncKpis(lista){
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const mes=hoy.getMonth(), anio=hoy.getFullYear();
+  const activas=lista.filter(r=>incActiva(r));
+  const esteMes=lista.filter(r=>{const d=parseDate(r.incInicio);return d&&d.getMonth()===mes&&d.getFullYear()===anio;});
+  const totalDias=lista.reduce((s,r)=>s+(parseInt(r.incDias)||0),0);
+  const prox7=activas.filter(r=>diasRestantes(r)<=7);
+  const sv2=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  sv2('ik-activas',activas.length);
+  sv2('ik-mes',esteMes.length);
+  sv2('ik-dias',totalDias);
+  sv2('ik-reincorp',prox7.length);
+}
+
 function renderInc(){
   const q=(document.getElementById('inc-q')||{}).value.toLowerCase()||'';
   const fp=(document.getElementById('inc-planta')||{}).value||'';
-  let lista=RE.filter(r=>r.incapacidad&&r.incapacidad!=='No');
-  if(q) lista=lista.filter(r=>(r.nombre+r.diagnostico+r.noEmp).toLowerCase().includes(q));
+  const ft=(document.getElementById('inc-tipo-f')||{}).value||'';
+  // Combinar INC propias + las que vienen de registros de enfermería
+  const deRE=RE.filter(r=>r.incapacidad&&r.incapacidad!=='No'&&r.incInicio)
+    .map(r=>({
+      id:'RE-'+r.id, noEmp:r.noEmp, nombre:r.nombre, planta:r.planta, turno:r.turno,
+      depto:r.depto, puesto:r.puesto, nss:r.nss,
+      tipo:r.incapacidad, diagnostico:r.diagnostico,
+      incInicio:r.incInicio, incFin:r.incFin, incDias:r.incDias,
+      fecha:r.fecha, institucion:'—', fuente:'consulta'
+    }));
+  const todas=[...INC.map(r=>({...r,fuente:'directa'})),...deRE];
+  updateIncKpis(todas);
+  let lista=todas;
+  if(_incTab==='activas') lista=lista.filter(r=>incActiva(r));
+  else if(_incTab==='proximas') lista=lista.filter(r=>incActiva(r)&&diasRestantes(r)<=7).sort((a,b)=>diasRestantes(a)-diasRestantes(b));
+  // historial: todas
+  if(q) lista=lista.filter(r=>(r.nombre+r.noEmp+r.diagnostico).toLowerCase().includes(q));
   if(fp) lista=lista.filter(r=>r.planta===fp);
-  lista=[...lista].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  if(ft) lista=lista.filter(r=>(r.tipo||'').toLowerCase().includes(ft.toLowerCase()));
+  lista=[...lista].sort((a,b)=>(b.incInicio||b.fecha||'').localeCompare(a.incInicio||a.fecha||''));
   const el=document.getElementById('inc-list');
-  if(!lista.length){el.innerHTML=`<div class="empty"><div class="empty-i">🏥</div><div>${RE.length?'Sin incapacidades registradas':'Sin registros aún'}</div></div>`;return;}
-  el.innerHTML=lista.map(r=>`
-    <div class="inc-card">
+  if(!lista.length){
+    el.innerHTML=`<div class="empty"><div class="empty-i">🏥</div><div>${_incTab==='activas'?'Sin incapacidades activas':'Sin registros'}</div></div>`;
+    return;
+  }
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  el.innerHTML=lista.map(r=>{
+    const activa=incActiva(r);
+    const dias=diasRestantes(r);
+    const tipoCls=r.tipo==='Riesgo de trabajo'?'pred':r.tipo==='Maternidad'?'ppurple':r.tipo==='Riesgo de trayecto'?'pamber':'pteal';
+    const estadoBadge=activa
+      ?`<span class="pill pgreen">🟢 Activa${dias>0?' · '+dias+' días restantes':''}</span>`
+      :`<span class="pill pgray">Finalizada</span>`;
+    return `<div class="inc-card" style="border-left:3px solid ${activa?'var(--teal)':'var(--bor2)'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-weight:700;margin-bottom:3px">${r.nombre||'—'} <span class="pill pred">🏥 ${r.incapacidad}</span></div>
-          <div style="font-size:12px;color:var(--tx2)">No.${r.noEmp||'—'} · ${r.planta||'—'} · ${r.turno||'—'}</div>
-          <div style="font-size:12px;color:var(--navy);margin-top:3px;font-weight:600">${r.diagnostico||'—'}</div>
-          ${r.incInicio?`<div style="font-size:11px;color:var(--tx3);margin-top:2px">📅 ${r.incInicio}${r.incFin?' al '+r.incFin:''} ${r.incDias?'('+r.incDias+' días)':''}</div>`:''}
-          <div style="font-size:11px;color:var(--tx3)">Consulta: ${r.fecha||'—'} ${r.hora?'· '+r.hora:''}</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px">
+            <span style="font-weight:700;font-size:13px">${r.nombre||'—'}</span>
+            <span class="pill ${tipoCls}">${r.tipo||'—'}</span>
+            ${estadoBadge}
+          </div>
+          <div style="font-size:12px;color:var(--tx2)">No.${r.noEmp||'—'} · ${r.planta||'—'} · ${r.turno||'—'}${r.depto?' · '+r.depto:''}</div>
+          <div style="font-size:12px;color:var(--navy);font-weight:600;margin-top:3px">${r.diagnostico||'—'}</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
+            ${r.incInicio?`<span>📅 Inicio: <strong>${r.incInicio}</strong></span>`:''}
+            ${r.incFin?`<span>🏁 Fin: <strong>${r.incFin}</strong></span>`:''}
+            ${r.incDias?`<span>⏱ <strong>${r.incDias} días</strong></span>`:''}
+            ${r.institucion&&r.institucion!=='—'?`<span>🏥 ${r.institucion}</span>`:''}
+            ${r.numImss?`<span>Folio IMSS: ${r.numImss}</span>`:''}
+          </div>
+          ${r.fuente==='consulta'?`<div style="font-size:10px;color:var(--tx3);margin-top:2px">Origen: consulta del ${r.fecha||'—'}</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${r.fuente!=='consulta'?`<button class="btn btn-ghost btn-xs" onclick="editarInc('${r.id}')">✏️ Editar</button>`:''}
+          <button class="btn btn-ghost btn-xs" onclick="imprimirInc('${r.id||'RE-'+r.id}')">🖨️</button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+
+// ── Búsqueda de empleado en modal inc ────────────────
+function buscarEmpInc(val){
+  val=(val||'').trim();
+  const drop=document.getElementById('inc-emp-drop');
+  if(!val||val.length<2){drop.classList.remove('show');return;}
+  const lc=val.toLowerCase();
+  const matches=HC.filter(e=>String(e.noEmp||'').toLowerCase().includes(lc)||String(e.nombre||'').toLowerCase().includes(lc)).slice(0,6);
+  if(!matches.length){drop.classList.remove('show');return;}
+  drop.innerHTML=matches.map(e=>`<div class="sr-item" onclick="selEmpInc('${esc(e.noEmp)}')" ><div class="sr-name">${e.nombre}</div><div class="sr-meta">No.${e.noEmp} · ${e.planta||'—'} · ${e.turno||'—'}</div></div>`).join('');
+  drop.classList.add('show');
+}
+
+function selEmpInc(noEmp){
+  const e=HC.find(x=>String(x.noEmp)===String(noEmp)); if(!e) return;
+  document.getElementById('inc-noemp').value=e.noEmp;
+  document.getElementById('inc-nombre-h').value=e.nombre;
+  document.getElementById('inc-planta-h').value=e.planta||'';
+  document.getElementById('inc-turno-h').value=e.turno||'';
+  document.getElementById('inc-depto-h').value=e.depto||'';
+  document.getElementById('inc-puesto-h').value=e.puesto||'';
+  document.getElementById('inc-nss-h').value=e.nss||'';
+  document.getElementById('inc-emp-drop').classList.remove('show');
+  const card=document.getElementById('inc-emp-card');
+  card.innerHTML=`<div class="emp-card">
+    <div class="ec-name">${e.nombre} <span class="ec-tag">No. ${e.noEmp}</span></div>
+    <div class="ec-grid">
+      <div class="ec-field"><label>Planta</label><div>${e.planta||'—'}</div></div>
+      <div class="ec-field"><label>Turno</label><div>${e.turno||'—'}</div></div>
+      <div class="ec-field"><label>Depto</label><div>${e.depto||'—'}</div></div>
+      <div class="ec-field"><label>NSS</label><div>${e.nss||'—'}</div></div>
+    </div>
+  </div>`;
+  card.style.display='block';
+  // Precargar fecha de hoy
+  const hoy=new Date().toISOString().split('T')[0];
+  if(!document.getElementById('inc-inicio').value) document.getElementById('inc-inicio').value=hoy;
+}
+
+// ── Cálculo automático de fechas ──────────────────────
+function calcDiasInc(){
+  const ini=document.getElementById('inc-inicio').value;
+  const fin=document.getElementById('inc-fin').value;
+  if(ini&&fin){
+    const d1=new Date(ini+'T12:00'), d2=new Date(fin+'T12:00');
+    const dias=Math.round((d2-d1)/(1000*60*60*24))+1;
+    if(dias>0) document.getElementById('inc-dias').value=dias;
+  }
+  updateResumenInc();
+}
+
+function calcFechaFinInc(){
+  const ini=document.getElementById('inc-inicio').value;
+  const dias=parseInt(document.getElementById('inc-dias').value)||0;
+  if(ini&&dias>0){
+    const d=new Date(ini+'T12:00');
+    d.setDate(d.getDate()+dias-1);
+    document.getElementById('inc-fin').value=d.toISOString().split('T')[0];
+  }
+  updateResumenInc();
+}
+
+function updateResumenInc(){
+  const ini=document.getElementById('inc-inicio').value;
+  const fin=document.getElementById('inc-fin').value;
+  const dias=document.getElementById('inc-dias').value;
+  const res=document.getElementById('inc-resumen');
+  const txt=document.getElementById('inc-resumen-txt');
+  if(ini&&(fin||dias)){
+    const dIni=new Date(ini+'T12:00').toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'});
+    const dFin=fin?new Date(fin+'T12:00').toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'}):'—';
+    txt.textContent=dIni+' al '+dFin+(dias?' ('+dias+' días)':'');
+    res.style.display='block';
+  } else res.style.display='none';
+}
+
+// ── Guardar incapacidad ───────────────────────────────
+async function guardarInc(){
+  const g=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
+  const noEmp=g('inc-noemp'), tipo=g('inc-tipo'), ini=g('inc-inicio'), dias=g('inc-dias'), dx=g('inc-dx');
+  if(!noEmp){toast('Busca un empleado primero','err');return;}
+  if(!tipo){toast('Selecciona el tipo de incapacidad','err');return;}
+  if(!ini){toast('La fecha de inicio es obligatoria','err');return;}
+  if(!dias){toast('Los días son obligatorios','err');return;}
+  if(!dx){toast('El diagnóstico es obligatorio','err');return;}
+  const inc={
+    id:'INC-'+Date.now(),
+    noEmp, tipo, diagnostico:dx,
+    incInicio:new Date(ini+'T12:00').toLocaleDateString('es-MX'),
+    incFin:g('inc-fin')?new Date(g('inc-fin')+'T12:00').toLocaleDateString('es-MX'):'',
+    incDias:parseInt(dias)||0,
+    numImss:g('inc-num-imss'), institucion:g('inc-institucion'),
+    medicoExp:g('inc-medico-exp'), notas:g('inc-notas'),
+    nombre:g('inc-nombre-h'), planta:g('inc-planta-h'),
+    turno:g('inc-turno-h'), depto:g('inc-depto-h'),
+    puesto:g('inc-puesto-h'), nss:g('inc-nss-h'),
+    fecha:new Date().toLocaleDateString('es-MX'),
+    registradoPor:currentUser?.nombre||'Enfermería',
+    mes:MESES[new Date().getMonth()], anio:new Date().getFullYear()
+  };
+  INC.push(inc); sv(SK.inc,INC);
+  // También guardar en GAS como registro especial
+  toast('⏳ Guardando...','inf'); setSyncDot('busy');
+  const r=await gasPost({action:'saveRecord', record:{
+    ...inc, id:Date.now(), tipoTrabajador:'interno',
+    tipo:tipo, incapacidad:tipo,
+    semana:getWeek(new Date()), mesNum:new Date().getMonth()+1
+  }});
+  setSyncDot(r.ok?'ok':'err');
+  toast(r.ok?'✅ Incapacidad guardada — '+inc.nombre:'⚠️ Guardada local','ok');
+  closeModal('mo-inc');
+  resetModalInc();
+  renderInc();
+}
+
+function resetModalInc(){
+  ['inc-noemp','inc-num-imss','inc-inicio','inc-dias','inc-fin','inc-dx','inc-medico-exp','inc-notas'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('inc-tipo').value='';
+  document.getElementById('inc-institucion').value='IMSS';
+  document.getElementById('inc-emp-card').style.display='none';
+  document.getElementById('inc-resumen').style.display='none';
+}
+
+function editarInc(id){
+  const r=INC.find(x=>x.id===id); if(!r) return;
+  document.getElementById('inc-mo-title').textContent='Editar incapacidad — '+r.nombre;
+  document.getElementById('inc-noemp').value=r.noEmp||'';
+  document.getElementById('inc-nombre-h').value=r.nombre||'';
+  document.getElementById('inc-planta-h').value=r.planta||'';
+  document.getElementById('inc-turno-h').value=r.turno||'';
+  document.getElementById('inc-depto-h').value=r.depto||'';
+  document.getElementById('inc-puesto-h').value=r.puesto||'';
+  document.getElementById('inc-nss-h').value=r.nss||'';
+  document.getElementById('inc-tipo').value=r.tipo||'';
+  document.getElementById('inc-dx').value=r.diagnostico||'';
+  document.getElementById('inc-num-imss').value=r.numImss||'';
+  document.getElementById('inc-medico-exp').value=r.medicoExp||'';
+  document.getElementById('inc-notas').value=r.notas||'';
+  // Convertir fechas a ISO para los inputs
+  const toISO=str=>{if(!str)return '';const p=str.split('/');return p.length===3?p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'):str;};
+  document.getElementById('inc-inicio').value=toISO(r.incInicio);
+  document.getElementById('inc-fin').value=toISO(r.incFin);
+  document.getElementById('inc-dias').value=r.incDias||'';
+  // Mostrar card
+  const card=document.getElementById('inc-emp-card');
+  card.innerHTML=`<div class="emp-card"><div class="ec-name">${r.nombre} <span class="ec-tag">No. ${r.noEmp}</span></div><div class="ec-grid"><div class="ec-field"><label>Planta</label><div>${r.planta||'—'}</div></div><div class="ec-field"><label>Turno</label><div>${r.turno||'—'}</div></div></div></div>`;
+  card.style.display='block';
+  updateResumenInc();
+  // Al guardar, actualizar en lugar de crear
+  document.querySelector('#mo-inc .btn-teal').onclick=function(){actualizarInc(id);};
+  openModal('mo-inc');
+}
+
+async function actualizarInc(id){
+  const g=id2=>{const e=document.getElementById(id2);return e?e.value.trim():'';};
+  const idx=INC.findIndex(x=>x.id===id); if(idx<0) return;
+  const ini=g('inc-inicio'), finV=g('inc-fin');
+  const toMX=str=>{if(!str)return '';const d=new Date(str+'T12:00');return d.toLocaleDateString('es-MX');};
+  Object.assign(INC[idx],{
+    tipo:g('inc-tipo'), diagnostico:g('inc-dx'),
+    incInicio:toMX(ini), incFin:toMX(finV),
+    incDias:parseInt(g('inc-dias'))||0,
+    numImss:g('inc-num-imss'), medicoExp:g('inc-medico-exp'),
+    notas:g('inc-notas'), editado:new Date().toLocaleDateString('es-MX')
+  });
+  sv(SK.inc,INC); renderInc();
+  toast('✅ Incapacidad actualizada','ok');
+  closeModal('mo-inc');
+  resetModalInc();
+  document.querySelector('#mo-inc .btn-teal').onclick=guardarInc;
+}
+
+// ── Imprimir constancia ──────────────────────────────
+function imprimirInc(id){
+  var r=INC.find(x=>x.id===id);
+  if(!r){
+    // Buscar en registros de RE
+    const rid=String(id).replace('RE-','');
+    const re=RE.find(x=>String(x.id)===rid); if(!re)return;
+    r={nombre:re.nombre,noEmp:re.noEmp,planta:re.planta,turno:re.turno,depto:re.depto,nss:re.nss,
+       tipo:re.incapacidad,diagnostico:re.diagnostico,incInicio:re.incInicio,incFin:re.incFin,incDias:re.incDias,
+       institucion:'—',medicoExp:'',fecha:re.fecha};
+  }
+  const w=window.open('','_blank','width=700,height=900'); if(!w){toast('Popup bloqueado','err');return;}
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Incapacidad ${r.noEmp}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}body{font-family:'Plus Jakarta Sans',Arial,sans-serif;font-size:11.5px;padding:0}
+    @page{size:letter;margin:14mm 16mm}@media print{.no-print{display:none!important}}
+    .page{max-width:680px;margin:0 auto;padding:20px}
+    .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:10px;border-bottom:2.5px solid #0D9488;margin-bottom:14px}
+    .hdr h1{font-size:15px;font-weight:800;color:#0F2942}.hdr p{font-size:10px;color:#666;margin-top:2px}
+    .hdr-r{text-align:right;font-size:10px;color:#666}
+    .sec{margin-bottom:12px}
+    .sec-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#64748B;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #E2E8F0}
+    .pac{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:7px;padding:10px}
+    .pf label{font-size:9px;text-transform:uppercase;color:#94A3B8;display:block}.pf span{font-size:12px;font-weight:700}
+    .inc-box{background:#F0FDFA;border:2px solid #0D9488;border-radius:8px;padding:14px;text-align:center;margin-bottom:12px}
+    .inc-tipo{font-size:18px;font-weight:800;color:#0F2942;margin-bottom:6px}
+    .inc-periodo{font-size:13px;color:#0D9488;font-weight:700}
+    .inc-dias{font-size:36px;font-weight:800;color:#0D9488;margin:8px 0 2px}
+    .sig{margin-top:40px;display:flex;justify-content:space-between}
+    .sig-box{text-align:center;width:180px;border-top:1.5px solid #0F2942;padding-top:5px;font-size:11px;font-weight:700}
+    .print-btn{position:fixed;bottom:16px;right:16px;background:#0D9488;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px}
+  </style></head><body>
+  <div class="page">
+    <div class="hdr">
+      <div><h1>Constancia de Incapacidad</h1><p>Teleflex · Salud Ocupacional · NOM-030-STPS</p></div>
+      <div class="hdr-r">Fecha de expedición:<br><strong>${new Date().toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})}</strong></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">Datos del trabajador</div>
+      <div class="pac">
+        <div class="pf"><label>Nombre</label><span>${r.nombre||'—'}</span></div>
+        <div class="pf"><label>No. Empleado</label><span>${r.noEmp||'—'}</span></div>
+        <div class="pf"><label>NSS</label><span>${r.nss||'—'}</span></div>
+        <div class="pf"><label>Planta</label><span>${r.planta||'—'}</span></div>
+        <div class="pf"><label>Turno</label><span>${r.turno||'—'}</span></div>
+        <div class="pf"><label>Departamento</label><span>${r.depto||'—'}</span></div>
+      </div>
+    </div>
+    <div class="inc-box">
+      <div class="inc-tipo">${r.tipo||'Incapacidad'}</div>
+      <div class="inc-dias">${r.incDias||'—'}</div>
+      <div style="font-size:11px;color:#0F766E;margin-bottom:8px">días de incapacidad</div>
+      <div class="inc-periodo">${r.incInicio||'—'} al ${r.incFin||'—'}</div>
+      ${r.numImss?`<div style="font-size:11px;color:#64748B;margin-top:6px">Folio IMSS: ${r.numImss}</div>`:''}
+    </div>
+    <div class="sec">
+      <div class="sec-title">Diagnóstico</div>
+      <p style="font-weight:700;font-size:13px">${r.diagnostico||'—'}</p>
+      ${r.medicoExp?`<p style="font-size:11px;color:#64748B;margin-top:4px">Médico que expide: ${r.medicoExp} · ${r.institucion||''}</p>`:''}
+    </div>
+    ${r.notas?`<div class="sec"><div class="sec-title">Observaciones</div><p style="font-size:12px">${r.notas}</p></div>`:''}
+    <div class="sig">
+      <div class="sig-box">Enfermería Ocupacional<br><small>Teleflex · ${r.fecha||''}</small></div>
+      <div class="sig-box">Firma del trabajador<br><small>Acuse de recibo</small></div>
+    </div>
+  </div>
+  <button class="print-btn no-print" onclick="window.print()">🖨️ Imprimir / PDF</button>
+  <script>setTimeout(()=>window.print(),700);<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+// ── Export Excel incapacidades ───────────────────────
+function exportInc(){
+  if(typeof XLSX==='undefined'){toast('XLSX no disponible','err');return;}
+  const wb=XLSX.utils.book_new();
+  const deRE=RE.filter(r=>r.incapacidad&&r.incapacidad!=='No'&&r.incInicio)
+    .map(r=>({nombre:r.nombre,noEmp:r.noEmp,planta:r.planta,turno:r.turno,depto:r.depto,nss:r.nss,
+      tipo:r.incapacidad,diagnostico:r.diagnostico,incInicio:r.incInicio,incFin:r.incFin,incDias:r.incDias,institucion:'—'}));
+  const todas=[...INC,...deRE];
+  const rows=[['No.Emp','Nombre','Planta','Turno','Departamento','NSS','Tipo','Diagnóstico','Inicio','Fin','Días','Institución','Folio IMSS','Médico que expide','Estado']];
+  todas.forEach(r=>{
+    const activa=incActiva(r)?'Activa':'Finalizada';
+    rows.push([r.noEmp||'',r.nombre||'',r.planta||'',r.turno||'',r.depto||'',r.nss||'',
+      r.tipo||'',r.diagnostico||'',r.incInicio||'',r.incFin||'',r.incDias||0,
+      r.institucion||'',r.numImss||'',r.medicoExp||'',activa]);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Incapacidades');
+  XLSX.writeFile(wb,'Incapacidades_'+new Date().toLocaleDateString('es-MX').replace(/\//g,'-')+'.xlsx');
+  toast('✅ Excel exportado','ok');
 }
 
 // ══════════════════════════════════════════════════════
