@@ -81,7 +81,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
 .eh{text-align:center;margin-bottom:16px}
 .eh h2{font-size:19px;font-weight:700;color:var(--navy)}
 .eh p{color:var(--tx2);margin-top:2px;font-size:12px}
-.clk{text-align:center;font-size:24px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums;margin-bottom:2px}
 .dl{text-align:center;font-size:11px;color:var(--tx2);margin-bottom:16px}
 .ni input{width:100%;padding:14px 16px;font-size:22px;font-weight:700;text-align:center;border:2.5px solid var(--bor);border-radius:10px;font-family:'Inter',sans-serif;letter-spacing:4px;outline:none;transition:.2s;background:var(--surf)}
 .ni input:focus{border-color:var(--blue)}
@@ -319,8 +318,6 @@ input[type=file]{display:none}
 <div class="sc on" id="sc-enf">
   <div class="ew">
     <div class="eh"><h2>Consulta de Enfermería</h2><p>Selecciona el tipo de trabajador</p></div>
-    <div class="clk" id="clk">--:--:--</div>
-    <div class="dl" id="dl"></div>
     <div class="tsel">
       <div class="tcard" id="ti-int" onclick="selTipo('interno')">
         <div class="ti">🏢</div><div class="tl">Trabajador Interno</div><div class="ts">Empleado de planta</div>
@@ -757,6 +754,10 @@ input[type=file]{display:none}
             style="font-size:16px;font-weight:700;letter-spacing:3px;border-color:var(--blue)">
         </div>
         <div id="vm-ecard" style="display:none;border-radius:7px;padding:8px 12px;margin-bottom:8px;font-size:12px;background:var(--g3);border:1.5px solid #A5D6A7"></div>
+        <input type="hidden" id="vm-noEmp"><input type="hidden" id="vm-nombre">
+        <input type="hidden" id="vm-planta"><input type="hidden" id="vm-turno">
+        <input type="hidden" id="vm-depto"><input type="hidden" id="vm-puesto">
+        <input type="hidden" id="vm-genero">
         <div id="vm-ant" style="display:none;background:#FFFDE7;border:1.5px solid #F9A825;border-radius:9px;padding:12px 14px;margin-bottom:10px"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div class="fi" style="margin:0"><label>Nombre</label><input type="text" id="vm-nom" placeholder="Automático"></div>
@@ -1247,7 +1248,7 @@ input[type=file]{display:none}
   <button onclick="go('citas')" id="bn-citas" style="background:none;border:none;color:rgba(255,255,255,.6);font-family:'Inter',sans-serif;font-size:9px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:6px;cursor:pointer;min-width:52px">
     <span style="font-size:18px">📅</span>Citas
   </button>
-  <button id="tb-vm" onclick="go('vm')" id="bn-vm" style="background:none;border:none;color:rgba(255,255,255,.6);font-family:'Inter',sans-serif;font-size:9px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:6px;cursor:pointer;min-width:52px">
+  <button onclick="go('vm')" id="bn-vm" style="background:none;border:none;color:rgba(255,255,255,.6);font-family:'Inter',sans-serif;font-size:9px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:6px;cursor:pointer;min-width:52px">
     <span style="font-size:18px">👨‍⚕️</span>Val. Méd.
   </button>
   <button id="tb-dash" onclick="go('dash')" id="bn-dash" style="background:none;border:none;color:rgba(255,255,255,.6);font-family:'Inter',sans-serif;font-size:9px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:6px;cursor:pointer;min-width:52px">
@@ -1332,16 +1333,13 @@ function init(){
   HC=ld(SK_HC);RE=ld(SK_RE);CI=ld(SK_CI);VM=ld(SK_VM);NUT=ld(SK_NUT);
   updateBadges();updateStats();
   if(HC.length){showHCT();document.getElementById('btn-del-hc').style.display='';}
-  buildAP();startClock();
+  buildAP();
   gPost({action:'init'}).catch(()=>{});
   // Auto-download HC from Sheets if empty on this device
   if(!HC.length) autoLoadHC();
 }
 
-function startClock(){
-  const t=()=>{const n=new Date();document.getElementById('clk').textContent=n.toLocaleTimeString('es-MX');document.getElementById('dl').textContent=n.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});};
-  t();setInterval(t,1000);
-}
+// startClock eliminado — fecha/hora se captura automáticamente en cada registro
 
 function go(id){
   document.querySelectorAll('.sc').forEach(s=>s.classList.remove('on'));
@@ -1695,6 +1693,7 @@ function nuevaValMed(){
   const _ec=document.getElementById('vm-emp-card'); if(_ec) _ec.style.display='none';
   const _ab=document.getElementById('vm-ant-box'); if(_ab) _ab.style.display='none';
   ['vm-noEmp','vm-nombre','vm-planta','vm-turno','vm-depto','vm-puesto','vm-nss','vm-genero',
+   'vm-ne','vm-nom','vm-pl','vm-tu','vm-dep','vm-pu','vm-mot','vm-tall',
    'vm-ta','vm-fc','vm-fr','vm-temp',
    'vm-peso','vm-talla','vm-spo2','vm-gluc','vm-motivo','vm-dx','vm-cie','vm-dx2',
    'vm-plan','vm-proxcita','vm-dias','vm-reinc','vm-rest','vm-medico','vm-cedula','vm-obs']
@@ -1711,12 +1710,12 @@ function nuevaValMed(){
   document.getElementById('vm-imc').value='';
   // auto calc IMC
   ['vm-peso','vm-talla'].forEach(id=>document.getElementById(id).addEventListener('input',calcIMC));
-  openModal('modal-valmed');
+  openModal('ov-vm');
 }
 
 function calcIMC(){
   const p=parseFloat(document.getElementById('vm-peso').value);
-  const t=parseFloat(document.getElementById('vm-talla').value)/100;
+  const t=parseFloat((document.getElementById('vm-tall')||document.getElementById('vm-talla')||{}).value)/100;
   if(p&&t){
     const imc=(p/(t*t)).toFixed(1);
     let cat=imc<18.5?'Bajo peso':imc<25?'Normal':imc<30?'Sobrepeso':'Obesidad';
@@ -1732,13 +1731,12 @@ function buscarEmpVM(val){
   if(!val) return;
   const e=headcount.find(x=>String(x.noEmp||'').trim().toLowerCase()===val.trim().toLowerCase());
   if(e){
-    document.getElementById('vm-nombre').value=e.nombre||'';
-    document.getElementById('vm-planta').value=e.planta||'';
-    document.getElementById('vm-turno').value=e.turno||'';
-    const depto=document.getElementById('vm-depto'); if(depto) depto.value=e.depto||'';
-    const puesto=document.getElementById('vm-puesto'); if(puesto) puesto.value=e.puesto||'';
-    const nss=document.getElementById('vm-nss'); if(nss) nss.value=e.nss||'';
-    const genero=document.getElementById('vm-genero'); if(genero) genero.value=e.genero||'';
+    var _s=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
+    _s('vm-nom',e.nombre);_s('vm-pl',e.planta);_s('vm-tu',e.turno);
+    _s('vm-dep',e.depto);_s('vm-pu',e.puesto);_s('vm-nss',e.nss);
+    // also fill hidden fields used by guardarValMed
+    _s('vm-nombre',e.nombre);_s('vm-planta',e.planta);_s('vm-turno',e.turno);
+    _s('vm-depto',e.depto);_s('vm-puesto',e.puesto);_s('vm-genero',e.genero);_s('vm-noEmp',val);
     if(card){
       card.innerHTML='<strong style="color:#1B5E20">'+e.nombre+'</strong>'
         +' <span style="color:#546E7A;font-size:11px"> - '+e.depto+' - '+e.planta+' - '+e.turno+'</span>';
@@ -1782,7 +1780,7 @@ function verDetalleVM(folio){
   // Show antecedentes
   if(v.noEmp) mostrarAntecedentesVM(v.noEmp);
   vmActual=v;
-  openModal('modal-valmed');
+  openModal('ov-vm');
 }
 
 function mostrarAntecedentesVM(noEmp){
@@ -1868,7 +1866,7 @@ async function guardarValMed(){
   }).join(' | ');
   const val={
     folio, fecha:ahora.toLocaleDateString('es-MX'), hora:ahora.toLocaleTimeString('es-MX'),
-    noEmp:document.getElementById('vm-noEmp').value,
+    noEmp:(document.getElementById('vm-ne')||{}).value||(document.getElementById('vm-noEmp')||{}).value||'',
     nombre:document.getElementById('vm-nombre').value,
     planta:document.getElementById('vm-planta').value,
     turno:document.getElementById('vm-turno').value,
@@ -1890,7 +1888,7 @@ async function guardarValMed(){
   };
   vmActual=val;
   valMedicas.push(val); sv(SK_VM,valMedicas);
-  closeModal('modal-valmed');
+  closeModal('ov-vm');
   toast('⏳ Guardando valoración médica...','inf');
   dot('busy');
   try{
@@ -2711,7 +2709,7 @@ function _abrirModalEdicion(cfg){
     ov.id = 'modal-edicion';
     ov.className = 'ov';
     ov.innerHTML = '<div class="mo" style="max-width:520px"><div class="mh"><div class="mt" id="ed-titulo">Editar</div><button class="mc" onclick="closeModal(\'modal-edicion\')">✕</button></div><div class="mb" id="ed-campos"></div><div style="padding:12px 20px 16px;display:flex;gap:8px"><button class="btn bg xl" onclick="guardarEdicion()" style="flex:1">💾 Guardar cambios</button><button class="btn bo xl" onclick="closeModal(\'modal-edicion\')" style="flex:1">Cancelar</button></div></div>';
-    document.body.appendChild(ov);
+    (document.body||document.documentElement).appendChild(ov);
   }
   document.getElementById('ed-titulo').textContent = cfg.titulo;
   var campos = document.getElementById('ed-campos');
@@ -2844,7 +2842,8 @@ function doLogin(){
   uinfo.innerHTML = '<span style="font-size:11px;color:rgba(255,255,255,.8)">'+rol.icon+' '+found.nombre+'</span>'+
     '<button onclick="doLogout()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer">Salir</button>'+
     (found.rol==='admin'?'<button onclick="openModal(\'modal-usuarios\');renderUserList()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer">👥 Usuarios</button>':'');
-  document.querySelector('.nav').appendChild(uinfo);
+  var nav = document.querySelector('.nav') || document.querySelector('nav') || document.body;
+  nav.appendChild(uinfo);
 }
 
 function doLogout(){
@@ -3010,44 +3009,45 @@ function exportarDashExcel(){
 function editarPlantasEmp(noEmp){
   var emp = HC.find(function(x){return String(x.noEmp)===String(noEmp);});
   if(!emp){toast('Empleado no encontrado','err');return;}
+  window._editPlantasNoEmp = noEmp;
+  var plantas_emp = emp.plantas || [emp.planta].filter(Boolean);
+
+  // Construir checkboxes con valores actuales
+  var checkHtml = (PLANTAS||['Américas','Barrancas','Cantera','Juventud']).map(function(p){
+    var checked = plantas_emp.indexOf(p)>=0 ? ' checked' : '';
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bor);cursor:pointer">'+
+      '<input type="checkbox" class="mpe-check" value="'+p+'"'+checked+' style="width:16px;height:16px"> '+
+      '<span style="font-size:13px">🏭 '+p+'</span></label>';
+  }).join('');
+
+  var turnoOpts = (TURNOS||['Matutino','Vespertino','Nocturno']).map(function(t){
+    return '<option'+(t===emp.turno?' selected':'')+'>'+t+'</option>';
+  }).join('');
+
   var ov = document.getElementById('modal-plantas-emp');
   if(!ov){
     ov = document.createElement('div');
     ov.id = 'modal-plantas-emp';
     ov.className = 'ov';
-    ov.innerHTML =
-      '<div class="mo" style="max-width:420px">'+
-        '<div class="mh"><div class="mt">🏭 Plantas asignadas</div><button class="mc" onclick="closeModal(\'modal-plantas-emp\')">✕</button></div>'+
-        '<div class="mb">'+
-          '<div style="font-weight:600;margin-bottom:10px" id="mpe-nombre"></div>'+
-          '<div style="margin-bottom:12px">'+
-            PLANTAS.map(function(p){
-              return '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bor);cursor:pointer">'+
-                '<input type="checkbox" class="mpe-check" value="'+p+'" style="width:16px;height:16px"> '+
-                '<span style="font-size:13px">🏭 '+p+'</span></label>';
-            }).join('')+
-          '</div>'+
-          '<div class="fi"><label>Turno principal</label>'+
-            '<select id="mpe-turno" style="padding:8px;border:1.5px solid var(--bor);border-radius:6px;font-size:13px;width:100%">'+
-              TURNOS.map(function(t){return '<option>'+t+'</option>';}).join('')+
-            '</select>'+
-          '</div>'+
-        '</div>'+
-        '<div style="padding:12px 20px 16px;display:flex;gap:8px">'+
-          '<button class="btn bg xl" onclick="guardarPlantasEmp()" style="flex:1">💾 Guardar</button>'+
-          '<button class="btn bo xl" onclick="closeModal(\'modal-plantas-emp\')" style="flex:1">Cancelar</button>'+
-        '</div>'+
-      '</div>';
-    document.body.appendChild(ov);
+    var body = document.body || document.documentElement;
+    body.appendChild(ov);
   }
-  window._editPlantasNoEmp = noEmp;
-  document.getElementById('mpe-nombre').textContent = emp.nombre + ' · ' + emp.noEmp;
-  var plantas = emp.plantas || [emp.planta].filter(Boolean);
-  document.querySelectorAll('.mpe-check').forEach(function(cb){
-    cb.checked = plantas.indexOf(cb.value) >= 0;
-  });
-  var turnoEl = document.getElementById('mpe-turno');
-  if(turnoEl) turnoEl.value = emp.turno || 'Matutino';
+  ov.innerHTML =
+    '<div class="mo" style="max-width:420px">'+
+      '<div class="mh"><div class="mt">🏭 Plantas asignadas — '+emp.nombre+'</div>'+
+        '<button class="mc" onclick="closeModal(&quot;modal-plantas-emp&quot;)">✕</button></div>'+
+      '<div class="mb">'+
+        '<div style="margin-bottom:12px">'+checkHtml+'</div>'+
+        '<div class="fi"><label>Turno principal</label>'+
+          '<select id="mpe-turno" style="padding:8px;border:1.5px solid var(--bor);border-radius:6px;font-size:13px;width:100%">'+
+          turnoOpts+'</select>'+
+        '</div>'+
+      '</div>'+
+      '<div style="padding:12px 20px 16px;display:flex;gap:8px">'+
+        '<button class="btn bg xl" onclick="guardarPlantasEmp()" style="flex:1">💾 Guardar</button>'+
+        '<button class="btn bo xl" onclick="closeModal(&quot;modal-plantas-emp&quot;)" style="flex:1">Cancelar</button>'+
+      '</div>'+
+    '</div>';
   openModal('modal-plantas-emp');
 }
 
