@@ -702,16 +702,15 @@ tr:hover td{background:var(--surf2)}
         <label>Diagnóstico *</label>
         <input type="text" id="inc-dx" placeholder="Diagnóstico principal">
       </div>
-      <div class="g2" style="margin-top:0">
-        <div class="fi" style="margin:0">
-          <label>Médico que expide</label>
-          <input type="text" id="inc-medico-exp" placeholder="Nombre del médico">
-        </div>
-        <div class="fi" style="margin:0">
-          <label>Institución</label>
-          <select id="inc-institucion">
-            <option>IMSS</option><option>ISSSTE</option><option>Particular</option><option>Teleflex SO</option>
-          </select>
+      <div class="fi" style="margin-top:0">
+        <label>Tipo de incapacidad</label>
+        <div style="display:flex;gap:8px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;cursor:pointer;padding:8px 14px;border:1.5px solid var(--bor);border-radius:8px;flex:1">
+            <input type="radio" name="inc-secuencia" id="inc-inicial" value="Inicial" checked> Inicial
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;cursor:pointer;padding:8px 14px;border:1.5px solid var(--bor);border-radius:8px;flex:1">
+            <input type="radio" name="inc-secuencia" id="inc-subsecuente" value="Subsecuente"> Subsecuente
+          </label>
         </div>
       </div>
       <div class="fi">
@@ -883,14 +882,16 @@ async function gasGet(params){
 function setSyncDot(s){const d=document.getElementById('sync-dot');if(d)d.className='dot '+(s==='ok'?'dok':s==='busy'?'dbusy':'derr');}
 async function syncRegs(){
   setSyncDot('busy');
-  // Si la enfermera tiene planta asignada, sync solo sus registros
-  var params={action:'getRegistros'};
-  // Pedimos todos y filtramos local — más simple y funciona offline
-  const r=await gasGet({action:'getRegistros'});
-  if(r.ok&&Array.isArray(r.data)){
-    RE=r.data;sv(SK.re,RE);updateBadges();buildRegMes();renderRegs();setSyncDot('ok');
-    toast('✅ '+RE.length+' registros sincronizados','ok');
-  } else setSyncDot('err');
+  try{
+    const [rRE, rINC] = await Promise.all([
+      gasGet({action:'getRegistros'}),
+      gasGet({action:'getInc'})
+    ]);
+    if(rRE.ok&&Array.isArray(rRE.data)){ RE=rRE.data; sv(SK.re,RE); updateBadges(); buildRegMes(); renderRegs(); }
+    if(rINC.ok&&Array.isArray(rINC.data)){ INC=rINC.data; sv(SK.inc,INC); }
+    setSyncDot('ok');
+    toast('✅ '+RE.length+' registros · '+INC.length+' incapacidades','ok');
+  } catch(e){ setSyncDot('err'); toast('Error de sync','err'); }
 }
 async function syncCitas(){setSyncDot('busy');const r=await gasGet({action:'getCitas'});if(r.ok&&Array.isArray(r.data)){CI=r.data;sv(SK.ci,CI);updateBadges();renderCitas();setSyncDot('ok');toast('Citas sincronizadas','ok');}else setSyncDot('err');}
 
@@ -965,18 +966,33 @@ function mostrarAnt(noEmp){
   const lc=String(noEmp||'').toLowerCase();
   const hist=RE.filter(r=>String(r.noEmp||'').toLowerCase()===lc);
   const alArr=[],cronicos=[];
+  // Alergias de registros previos
   hist.forEach(r=>{if(r.alergias)r.alergias.split(/[,;]+/).forEach(a=>{a=a.trim();if(a&&!alArr.includes(a))alArr.push(a);});});
+  // Enfermedades crónicas: diagnósticos de control crónico
+  hist.filter(r=>r.tipo==='Control crónico').forEach(r=>{
+    if(r.diagnostico&&!cronicos.includes(r.diagnostico)) cronicos.push(r.diagnostico);
+  });
+  // Incapacidades previas del empleado
+  const incsPrev=(INC||[]).filter(r=>String(r.noEmp||'').toLowerCase()===lc);
   // Últimas 5 visitas
-  const ult=hist.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,5);
+  const ult=[...hist].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,5);
   const panel=document.getElementById('ant-panel');
   let html='';
   if(alArr.length){
     html+=`<div class="ant ant-al"><div class="ant-title" style="color:#DC2626">⚠️ Alergias registradas</div>${alArr.map(a=>`<span class="ant-tag" style="background:#FEE2E2;color:#991B1B">${a}</span>`).join('')}</div>`;
     const af=document.getElementById('f-alergias');if(af&&!af.value)af.value=alArr.join(', ');
   }
+  if(cronicos.length){
+    html+=`<div class="ant ant-cr"><div class="ant-title" style="color:#92400E">📋 Enfermedades crónicas</div>${cronicos.map(c=>`<span class="ant-tag" style="background:#FEF3C7;color:#92400E">${c}</span>`).join('')}</div>`;
+  }
+  if(incsPrev.length){
+    const activas=incsPrev.filter(r=>incActiva(r));
+    html+=`<div class="ant" style="background:var(--red2);border:1.5px solid #FCA5A5"><div class="ant-title" style="color:#991B1B">🏥 Incapacidades (${incsPrev.length} total${activas.length?' · '+activas.length+' activa':''})</div>${incsPrev.slice(0,3).map(r=>`<div style="font-size:11px;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.06)"><strong>${r.tipo}</strong> · ${r.incInicio||'—'}${r.incDias?' ('+r.incDias+' días)':''}</div>`).join('')}</div>`;
+  }
   if(ult.length){
     html+=`<div class="ant ant-ht"><div class="ant-title" style="color:#0F766E">📅 Últimas ${ult.length} consultas</div>${ult.map(r=>{const s=SIS[r.sistema]||SIS.otro;return`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.06);font-size:12px"><span style="color:var(--tx3);white-space:nowrap;min-width:75px">${r.fecha||'—'}</span><span style="font-weight:600;flex:1">${r.diagnostico||'—'}</span><span class="pill" style="background:${s.bg};color:${s.c}">${s.n}</span></div>`;}).join('')}</div>`;
   }
+  if(!html) html='<div style="font-size:11px;color:var(--tx3);padding:6px 0">Sin antecedentes registrados</div>';
   panel.innerHTML=html;
 }
 
@@ -1353,6 +1369,7 @@ function renderInc(){
           <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px">
             <span style="font-weight:700;font-size:13px">${r.nombre||'—'}</span>
             <span class="pill ${tipoCls}">${r.tipo||'—'}</span>
+            ${r.secuencia?`<span class="pill pgray">${r.secuencia}</span>`:''}
             ${estadoBadge}
           </div>
           <div style="font-size:12px;color:var(--tx2)">No.${r.noEmp||'—'} · ${r.planta||'—'} · ${r.turno||'—'}${r.depto?' · '+r.depto:''}</div>
@@ -1465,8 +1482,9 @@ async function guardarInc(){
     incInicio:new Date(ini+'T12:00').toLocaleDateString('es-MX'),
     incFin:g('inc-fin')?new Date(g('inc-fin')+'T12:00').toLocaleDateString('es-MX'):'',
     incDias:parseInt(dias)||0,
-    numImss:g('inc-num-imss'), institucion:g('inc-institucion'),
-    medicoExp:g('inc-medico-exp'), notas:g('inc-notas'),
+    numImss:g('inc-num-imss'),
+    secuencia:document.querySelector('input[name="inc-secuencia"]:checked')?.value||'Inicial',
+    notas:g('inc-notas'),
     nombre:g('inc-nombre-h'), planta:g('inc-planta-h'),
     turno:g('inc-turno-h'), depto:g('inc-depto-h'),
     puesto:g('inc-puesto-h'), nss:g('inc-nss-h'),
@@ -1477,6 +1495,8 @@ async function guardarInc(){
   INC.push(inc); sv(SK.inc,INC);
   // También guardar en GAS como registro especial
   toast('⏳ Guardando...','inf'); setSyncDot('busy');
+  // Guardar incapacidad en hoja específica del GAS
+  gasPost({action:'saveInc', inc}).catch(()=>{});
   const r=await gasPost({action:'saveRecord', record:{
     ...inc, id:Date.now(), tipoTrabajador:'interno',
     tipo:tipo, incapacidad:tipo,
@@ -1490,9 +1510,9 @@ async function guardarInc(){
 }
 
 function resetModalInc(){
-  ['inc-noemp','inc-num-imss','inc-inicio','inc-dias','inc-fin','inc-dx','inc-medico-exp','inc-notas'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['inc-noemp','inc-num-imss','inc-inicio','inc-dias','inc-fin','inc-dx','inc-notas'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('inc-tipo').value='';
-  document.getElementById('inc-institucion').value='IMSS';
+  const ri=document.getElementById('inc-inicial');if(ri)ri.checked=true;
   document.getElementById('inc-emp-card').style.display='none';
   document.getElementById('inc-resumen').style.display='none';
 }
@@ -1536,7 +1556,7 @@ async function actualizarInc(id){
     tipo:g('inc-tipo'), diagnostico:g('inc-dx'),
     incInicio:toMX(ini), incFin:toMX(finV),
     incDias:parseInt(g('inc-dias'))||0,
-    numImss:g('inc-num-imss'), medicoExp:g('inc-medico-exp'),
+    numImss:g('inc-num-imss'), secuencia:document.querySelector('input[name="inc-secuencia"]:checked')?.value||'Inicial',
     notas:g('inc-notas'), editado:new Date().toLocaleDateString('es-MX')
   });
   sv(SK.inc,INC); renderInc();
