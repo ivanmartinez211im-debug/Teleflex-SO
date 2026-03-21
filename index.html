@@ -1145,33 +1145,110 @@ function mostrarAnt(noEmp){
   const lc=String(noEmp||'').toLowerCase();
   const hist=RE.filter(r=>String(r.noEmp||'').toLowerCase()===lc);
   const alArr=[],cronicos=[];
-  // Alergias de registros previos
-  hist.forEach(r=>{if(r.alergias)r.alergias.split(/[,;]+/).forEach(a=>{a=a.trim();if(a&&!alArr.includes(a))alArr.push(a);});});
-  // Enfermedades crónicas: diagnósticos de control crónico
-  hist.filter(r=>r.tipo==='Control crónico').forEach(r=>{
-    if(r.diagnostico&&!cronicos.includes(r.diagnostico)) cronicos.push(r.diagnostico);
+
+  // ── Alergias (deduplicadas) ───────────────────────────────────
+  hist.forEach(r=>{
+    if(r.alergias) r.alergias.split(/[,;]+/).forEach(a=>{
+      a=a.trim();
+      if(a&&!alArr.map(x=>x.toLowerCase()).includes(a.toLowerCase())) alArr.push(a);
+    });
   });
-  // Incapacidades previas del empleado
+
+  // ── Enfermedades crónicas ─────────────────────────────────────
+  hist.filter(r=>r.tipo==='Control crónico'||r.cronicos).forEach(r=>{
+    const src=r.cronicos||r.diagnostico||'';
+    src.split(/[,;]+/).forEach(c=>{c=c.trim();if(c&&!cronicos.includes(c))cronicos.push(c);});
+  });
+
+  // ── Frecuencia últimos 30 días ────────────────────────────────
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const hace30=new Date(hoy); hace30.setDate(hoy.getDate()-30);
+  const parseF=str=>{
+    if(!str) return null;
+    if(str.includes('/')) {const p=str.split('/');return new Date(p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'));}
+    return new Date(str);
+  };
+  const en30=hist.filter(r=>{const d=parseF(r.fecha);return d&&d>=hace30&&d<=hoy;});
+  const n=en30.length;
+  // Color: 1-3 verde, 4-10 amarillo, +10 rojo
+  const frecColor = n===0?null : n<=3?{bg:'#F0FDF4',border:'#86EFAC',txt:'#166534',icon:'🟢'} : n<=10?{bg:'#FFFBEB',border:'#FCD34D',txt:'#92400E',icon:'🟡'} : {bg:'#FEF2F2',border:'#FCA5A5',txt:'#991B1B',icon:'🔴'};
+  // Motivos de consulta recientes (últimos 30 días)
+  const motivosRecientes=[...new Set(en30.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(r=>r.diagnostico||r.tipo||'').filter(Boolean))].slice(0,4);
+
+  // ── Incapacidades ─────────────────────────────────────────────
   const incsPrev=(INC||[]).filter(r=>String(r.noEmp||'').toLowerCase()===lc);
-  // Últimas 5 visitas
+
+  // ── Últimas 5 visitas ─────────────────────────────────────────
   const ult=[...hist].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,5);
+
   const panel=document.getElementById('ant-panel');
   let html='';
+
+  // ── ALERTA FRECUENCIA (prominente, arriba de todo) ────────────
+  if(frecColor){
+    html+=`<div style="background:${frecColor.bg};border:2px solid ${frecColor.border};border-radius:10px;padding:11px 14px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <div style="font-size:12px;font-weight:700;color:${frecColor.txt}">
+          ${frecColor.icon} ${n} consulta${n!==1?'s':''} en los últimos 30 días
+        </div>
+        <span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:8px;background:${frecColor.border};color:${frecColor.txt}">
+          ${n<=3?'FRECUENCIA NORMAL':n<=10?'FRECUENCIA ELEVADA':'FRECUENCIA ALTA — REVISAR'}
+        </span>
+      </div>
+      ${motivosRecientes.length?`<div style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">
+        ${motivosRecientes.map(m=>`<span style="font-size:11px;background:rgba(0,0,0,.06);padding:2px 8px;border-radius:6px;color:${frecColor.txt}">${m}</span>`).join('')}
+      </div>`:''}
+    </div>`;
+  }
+
+  // ── ALERGIAS ──────────────────────────────────────────────────
   if(alArr.length){
-    html+=`<div class="ant ant-al"><div class="ant-title" style="color:#DC2626">⚠️ Alergias registradas</div>${alArr.map(a=>`<span class="ant-tag" style="background:#FEE2E2;color:#991B1B">${a}</span>`).join('')}</div>`;
-    const af=document.getElementById('f-alergias');if(af&&!af.value)af.value=alArr.join(', ');
-  const cf=document.getElementById('f-cronicos');if(cf&&!cf.value&&cronicos.length)cf.value=cronicos.join(', ');
+    html+=`<div class="ant ant-al">
+      <div class="ant-title" style="color:#DC2626">⚠️ Alergias registradas</div>
+      ${alArr.map(a=>`<span class="ant-tag" style="background:#FEE2E2;color:#991B1B">${a}</span>`).join('')}
+    </div>`;
+    const af=document.getElementById('f-alergias');
+    if(af&&!af.value) af.value=alArr.join(', ');
   }
+  const cf=document.getElementById('f-cronicos');
+  if(cf&&!cf.value&&cronicos.length) cf.value=cronicos.join(', ');
+
+  // ── ENFERMEDADES CRÓNICAS ─────────────────────────────────────
   if(cronicos.length){
-    html+=`<div class="ant ant-cr"><div class="ant-title" style="color:#92400E">📋 Enfermedades crónicas</div>${cronicos.map(c=>`<span class="ant-tag" style="background:#FEF3C7;color:#92400E">${c}</span>`).join('')}</div>`;
+    html+=`<div class="ant ant-cr">
+      <div class="ant-title" style="color:#92400E">📋 Enfermedades crónicas</div>
+      ${cronicos.map(c=>`<span class="ant-tag" style="background:#FEF3C7;color:#92400E">${c}</span>`).join('')}
+    </div>`;
   }
+
+  // ── INCAPACIDADES ─────────────────────────────────────────────
   if(incsPrev.length){
     const activas=incsPrev.filter(r=>incActiva(r));
-    html+=`<div class="ant" style="background:var(--red2);border:1.5px solid #FCA5A5"><div class="ant-title" style="color:#991B1B">🏥 Incapacidades (${incsPrev.length} total${activas.length?' · '+activas.length+' activa':''})</div>${incsPrev.slice(0,3).map(r=>`<div style="font-size:11px;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.06)"><strong>${r.tipo}</strong> · ${r.incInicio||'—'}${r.incDias?' ('+r.incDias+' días)':''}</div>`).join('')}</div>`;
+    html+=`<div class="ant" style="background:var(--red2);border:1.5px solid #FCA5A5">
+      <div class="ant-title" style="color:#991B1B">🏥 Incapacidades (${incsPrev.length} total${activas.length?' · '+activas.length+' activa':''})</div>
+      ${incsPrev.slice(0,3).map(r=>`<div style="font-size:11px;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.06)">
+        <strong>${r.tipo||r.Tipo||'—'}</strong> · ${r.incInicio||'—'}${r.incDias?' ('+r.incDias+' días)':''}
+      </div>`).join('')}
+    </div>`;
   }
+
+  // ── ÚLTIMAS 5 CONSULTAS ───────────────────────────────────────
   if(ult.length){
-    html+=`<div class="ant ant-ht"><div class="ant-title" style="color:#0F766E">📅 Últimas ${ult.length} consultas</div>${ult.map(r=>{const s=SIS[r.sistema]||SIS.otro;return`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.06);font-size:12px"><span style="color:var(--tx3);white-space:nowrap;min-width:75px">${r.fecha||'—'}</span><span style="font-weight:600;flex:1">${r.diagnostico||'—'}</span><span class="pill" style="background:${s.bg};color:${s.c}">${s.n}</span></div>`;}).join('')}</div>`;
+    html+=`<div class="ant ant-ht">
+      <div class="ant-title" style="color:#0F766E">📅 Últimas ${ult.length} consultas</div>
+      ${ult.map(r=>{
+        const s=SIS[r.sistema]||SIS.otro;
+        const esReciente=en30.some(x=>x.id===r.id);
+        return`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.06);font-size:12px">
+          <span style="color:var(--tx3);white-space:nowrap;min-width:75px">${r.fecha||'—'}</span>
+          <span style="font-weight:600;flex:1">${r.diagnostico||'—'}</span>
+          <span class="pill" style="background:${s.bg};color:${s.c}">${s.n}</span>
+          ${esReciente?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:4px">30d</span>`:''}
+        </div>`;
+      }).join('')}
+    </div>`;
   }
+
   if(!html) html='<div style="font-size:11px;color:var(--tx3);padding:6px 0">Sin antecedentes registrados</div>';
   // Banner embarazo — visible en todas las consultas
   const emb=EMBARAZADAS.find(x=>String(x.noEmp||'').toLowerCase()===lc);
