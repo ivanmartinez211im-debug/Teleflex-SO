@@ -385,6 +385,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--sf2);
     </div>
   </div>
 
+  <div id="inc-open-search" style="margin-bottom:12px"></div>
+
   <!-- KPIs -->
   <div class="kpis">
     <div class="kpi rd"><div class="kv" id="ki-act">0</div><div class="kl">Activas</div></div>
@@ -853,17 +855,6 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--sf2);
 
 <div id="toast"></div>
 </div><!-- /app -->
-<!-- Botones flotantes — FUERA del #app para siempre visibles -->
-<div id="fab-container" class="no-print" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9000;flex-direction:column;gap:10px;align-items:flex-end">
-  <div style="display:flex;align-items:center;gap:8px" id="fab-consulta">
-    <span id="fab-consulta-label" style="background:rgba(15,41,66,.92);color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)">📝 Nueva consulta</span>
-    <button onclick="go('captura')" style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#0F2942,#0D6B5E);color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:.2s;display:flex;align-items:center;justify-content:center" onmouseover="this.parentElement.querySelector('span').style.display='inline'" onmouseout="this.parentElement.querySelector('span').style.display='inline'">📝</button>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px" id="fab-inc">
-    <span style="background:rgba(185,28,28,.92);color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)">📋 Nueva incapacidad</span>
-    <button onclick="openModal('mo-inc')" style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#DC2626,#B91C1C);color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(220,38,38,.45);transition:.2s;display:flex;align-items:center;justify-content:center">📋</button>
-  </div>
-</div>
 <script>
 'use strict';
 // ════════════════════════════════════════════════════════════════
@@ -875,7 +866,7 @@ const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
 const MSC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const PLANTAS=['Américas','Barrancas','Cantera','Juventud'];
 const DIAS_PLANTA={Américas:'Martes',Barrancas:'Miércoles',Cantera:'Jueves',Juventud:'Lunes'};
-let HC=[],CONS=[],INC=[],CITAS=[],USER=null,_empActual=null,_expData=null,_histFiltro='todo',_charts={},_editFolio=null,_hcPlantaFiltro='';
+let HC=[],CONS=[],INC=[],CITAS=[],USER=null,_empActual=null,_capEmp=null,_expData=null,_histFiltro='todo',_charts={},_editFolio=null,_hcPlantaFiltro='';
 
 
 // Normaliza texto: quita acentos, convierte a minúsculas
@@ -983,20 +974,13 @@ function initApp(){
   INC=ld(SK.inc)||[];
   CITAS=ld(SK.citas)||[];
 
-  // Mostrar pantalla de carga mientras sincroniza
-  mostrarSyncInicio();
+  // Dejar lista la pantalla inicial de consulta
+  const ch=document.getElementById('cap-emp-header');if(ch&&!ch.innerHTML.trim())ch.innerHTML=buildCapBuscador();
+  const ct=document.getElementById('cap-titulo');if(ct)ct.textContent=USER&&USER.rol==='medico'?'Nueva valoración médica':'Nueva nota de enfermería';
+  const cs=document.getElementById('cap-sub');if(cs)cs.textContent='Busca al empleado para comenzar la captura';
 
   // Sync automático al inicio
-  syncAll(false).then(()=>{
-    ocultarSyncInicio();
-    go('captura'); // Activa pantalla + pestaña + renderCaptura()
-    if(!HC.length){
-      toast('⚠️ Sin Head Count — ve a la pestaña HC para cargar empleados','inf');
-    }
-  }).catch(()=>{
-    ocultarSyncInicio();
-    go('captura');
-  });
+  syncAll();
 }
 function go(id){
   document.querySelectorAll('.sc').forEach(s=>s.classList.remove('on'));
@@ -1004,8 +988,12 @@ function go(id){
   const sc=document.getElementById('sc-'+id);if(sc)sc.classList.add('on');
   const tb=document.getElementById('tb-'+id);if(tb)tb.classList.add('on');
   if(id==='captura'){
-    renderCaptura();
-    // Focus search input after brief delay
+    // Reset captura screen
+    const ct=document.getElementById('cap-titulo');if(ct)ct.textContent=USER&&USER.rol==='medico'?'Nueva valoración médica':'Nueva nota de enfermería';
+    const ch=document.getElementById('cap-emp-header');if(ch)ch.innerHTML=buildCapBuscador();
+    const ca=document.getElementById('cap-alertas');if(ca)ca.innerHTML='';
+    const cf=document.getElementById('cap-form-container');if(cf)cf.innerHTML='';
+    _capEmp=null;
     setTimeout(()=>{const q=document.getElementById('cap-q');if(q)q.focus();},150);
   }
   if(id==='inc') renderInc();
@@ -1789,9 +1777,154 @@ function renderDash(){
       <div class="kpi" style="margin:0;border-left:3px solid var(--pu)"><div class="kv" style="color:var(--pu)">${prolongadas}</div><div class="kl">Prolongadas +28d</div></div>
     </div>`;
 }
+
+
+// ════════════════════════════════════════════════════════════════
+// HELPERS FALTANTES / BUSCADORES
+// ════════════════════════════════════════════════════════════════
+function buildEmpCardHtml(emp){
+  return `<div class="ec"><div class="ec-name">${emp.nombre||'—'} <span class="ec-tag">No. ${emp.noEmp||'—'}</span>${emp.genero?`<span class="ec-tag">${emp.genero}</span>`:''}</div><div class="ec-grid"><div class="ec-f"><label>Planta</label><span>${emp.planta||'—'}</span></div><div class="ec-f"><label>Departamento</label><span>${emp.depto||'—'}</span></div><div class="ec-f"><label>Puesto</label><span>${emp.puesto||'—'}</span></div><div class="ec-f"><label>Turno</label><span>${emp.turno||'—'}</span></div><div class="ec-f"><label>NSS</label><span>${emp.nss||'—'}</span></div>${emp.telefono?`<div class="ec-f"><label>Teléfono</label><span>${emp.telefono}</span></div>`:''}</div></div>`;
+}
+function buildCapBuscador(){
+  return `<div class="card cp" style="margin-bottom:12px"><div class="sec-t">🔍 Buscar empleado para consulta</div><div class="sw"><span class="si">🔍</span><input type="text" id="cap-q" placeholder="No. empleado o nombre..." oninput="buscarCapEmp(this.value)" autocomplete="off" style="font-size:14px;font-weight:600"><div class="sd" id="cap-drop"></div></div></div>`;
+}
+function buscarCapEmp(val){
+  const drop=document.getElementById('cap-drop'); if(!drop)return;
+  val=(val||'').trim();
+  if(!val||val.length<2){drop.classList.remove('show'); return;}
+  if(!HC.length){drop.innerHTML='<div class="si-item" style="color:var(--am)">⚠️ Sin HC cargado</div>';drop.classList.add('show');return;}
+  const lc=val.toLowerCase();
+  const matches=HC.filter(e=>String(e.noEmp||'').toLowerCase().includes(lc)||String(e.nombre||'').toLowerCase().includes(lc)).slice(0,8);
+  if(!matches.length){drop.classList.remove('show');return;}
+  drop.innerHTML=matches.map(e=>`<div class="si-item" onclick="abrirConsultaEmpleado('${esc(e.noEmp)}')"><div class="si-name">${e.nombre}</div><div class="si-meta">No.${e.noEmp} · ${e.planta||'—'} · ${e.depto||'—'}</div></div>`).join('');
+  drop.classList.add('show');
+}
+function abrirConsultaEmpleado(noEmp){
+  const emp=HC.find(x=>String(x.noEmp)===String(noEmp));
+  if(!emp){toast('Empleado no encontrado','err');return;}
+  _capEmp=emp;
+  _empActual=emp;
+  const ch=document.getElementById('cap-emp-header');
+  if(ch)ch.innerHTML=buildCapBuscador()+buildEmpCardHtml(emp);
+  const q=document.getElementById('cap-q'); if(q) q.value=`${emp.nombre} (No.${emp.noEmp})`;
+  const drop=document.getElementById('cap-drop'); if(drop) drop.classList.remove('show');
+  const ct=document.getElementById('cap-titulo'); if(ct) ct.textContent=(USER&&USER.rol==='medico'?'Valoración médica':'Consulta')+' · '+(emp.nombre||'');
+  const cs=document.getElementById('cap-sub'); if(cs) cs.textContent=`No. ${emp.noEmp||'—'} · ${emp.planta||'—'} · ${emp.depto||'—'}`;
+  renderPanelCaptura(emp);
+}
+function renderHC(q=''){
+  const tb=document.getElementById('hc-tbody'); if(!tb) return;
+  let lista=[...HC];
+  const lc=String(q||'').toLowerCase().trim();
+  if(lc) lista=lista.filter(e=>[e.noEmp,e.nombre,e.planta,e.depto,e.puesto,e.nss,e.telefono].some(v=>String(v||'').toLowerCase().includes(lc)));
+  if(_hcPlantaFiltro) lista=lista.filter(e=>normEq(e.planta,_hcPlantaFiltro));
+  lista.sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||'')));
+  tb.innerHTML=lista.length?lista.map(e=>`<tr><td>${e.noEmp||'—'}</td><td>${e.nombre||'—'}</td><td>${e.planta||'—'}</td><td>${e.depto||'—'}</td><td>${e.puesto||'—'}</td><td>${e.genero||'—'}</td><td>${e.nss||'—'}</td><td>${e.telefono||'—'}</td></tr>`).join(''):`<tr><td colspan="8" style="text-align:center;color:var(--tx3);padding:18px">Sin resultados</td></tr>`;
+}
+function renderHCPlanta(v){_hcPlantaFiltro=v||''; const q=document.querySelector('#hc-table input[type="text"]'); renderHC(q?q.value:'');}
+function mapHCRow(row){
+  const obj={};
+  Object.keys(row||{}).forEach(k=>obj[String(k).toLowerCase().trim()]=row[k]);
+  return {
+    noEmp: obj['número']||obj['numero']||obj['no. empleado']||obj['no empleado']||obj['noemp']||obj['num empleado']||obj['empleado']||'',
+    nombre: obj['nombre']||obj['nombre completo']||'',
+    depto: obj['departamento']||obj['depto']||'',
+    puesto: obj['puesto']||'',
+    categoria: obj['categoría']||obj['categoria']||'',
+    nss: obj['nss']||obj['imss']||'',
+    planta: obj['planta']||'',
+    genero: obj['género']||obj['genero']||obj['sexo']||'',
+    ingreso: obj['ingreso']||obj['fecha ingreso']||'',
+    fechaNacimiento: obj['nacimiento']||obj['fecha nacimiento']||'',
+    edad: obj['edad']||'',
+    telefono: obj['teléfono']||obj['telefono']||'',
+    turno: obj['turno']||''
+  };
+}
+function importarHC(input){
+  const file=input&&input.files&&input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      HC=rows.map(mapHCRow).filter(r=>r.noEmp||r.nombre);
+      sv(SK.hc,HC);
+      const cnt=document.getElementById('hc-cnt'); if(cnt) cnt.textContent=HC.length+' empleados';
+      const up=document.getElementById('hc-upload'); if(up) up.style.display=HC.length?'none':'';
+      const table=document.getElementById('hc-table'); if(table) table.style.display=HC.length?'block':'none';
+      const btn=document.getElementById('btn-del-hc'); if(btn) btn.style.display=HC.length?'':'none';
+      renderHC('');
+      toast('✅ HC importado: '+HC.length,'ok');
+    }catch(err){toast('Error al importar HC','err');}
+    if(input) input.value='';
+  };
+  reader.readAsBinaryString(file);
+}
+function delHC(){
+  HC=[]; sv(SK.hc,HC);
+  const cnt=document.getElementById('hc-cnt'); if(cnt) cnt.textContent='0 empleados';
+  const up=document.getElementById('hc-upload'); if(up) up.style.display='block';
+  const table=document.getElementById('hc-table'); if(table) table.style.display='none';
+  const btn=document.getElementById('btn-del-hc'); if(btn) btn.style.display='none';
+  toast('HC limpiado','inf');
+}
+function buscarEmpModal(inputId,dropId,hiddenId){
+  const inp=document.getElementById(inputId), drop=document.getElementById(dropId), hid=document.getElementById(hiddenId);
+  if(!inp||!drop||!hid) return;
+  const val=(inp.value||'').trim();
+  if(!val||val.length<2){drop.classList.remove('show'); return;}
+  if(!HC.length){drop.innerHTML='<div class="si-item" style="color:var(--am)">⚠️ Sin HC cargado</div>'; drop.classList.add('show'); return;}
+  const lc=val.toLowerCase();
+  const matches=HC.filter(e=>String(e.noEmp||'').toLowerCase().includes(lc)||String(e.nombre||'').toLowerCase().includes(lc)).slice(0,8);
+  if(!matches.length){drop.classList.remove('show');return;}
+  drop.innerHTML=matches.map(e=>`<div class="si-item" onclick="seleccionarEmpModal('${inputId}','${dropId}','${hiddenId}','${esc(e.noEmp)}')"><div class="si-name">${e.nombre}</div><div class="si-meta">No.${e.noEmp} · ${e.planta||'—'} · ${e.depto||'—'}</div></div>`).join('');
+  drop.classList.add('show');
+}
+function seleccionarEmpModal(inputId,dropId,hiddenId,noEmp){
+  const emp=HC.find(x=>String(x.noEmp)===String(noEmp)); if(!emp) return;
+  const inp=document.getElementById(inputId), drop=document.getElementById(dropId), hid=document.getElementById(hiddenId);
+  if(inp) inp.value=`${emp.nombre} (No.${emp.noEmp})`;
+  if(hid) hid.value=emp.noEmp;
+  if(drop) drop.classList.remove('show');
+  const cardId=hiddenId==='inc-es'?'inc-ec':hiddenId==='cit-es'?'cit-ec':'';
+  const card=document.getElementById(cardId);
+  if(card) card.innerHTML=buildEmpCardHtml(emp);
+  if(hiddenId==='cit-es') sugFechaCita();
+}
+function buildIncBuscador(){
+  return `<div class="card cp"><div class="sec-t">🔍 Buscar empleado para incapacidad</div><div class="sw"><span class="si">🔍</span><input type="text" id="inc-open-q" placeholder="No. empleado o nombre..." oninput="buscarIncEmpleado(this.value)" autocomplete="off" style="font-size:14px;font-weight:600"><div class="sd" id="inc-open-drop"></div></div></div>`;
+}
+function buscarIncEmpleado(val){
+  const drop=document.getElementById('inc-open-drop'); if(!drop) return;
+  val=(val||'').trim();
+  if(!val||val.length<2){drop.classList.remove('show'); return;}
+  if(!HC.length){drop.innerHTML='<div class="si-item" style="color:var(--am)">⚠️ Sin HC cargado</div>';drop.classList.add('show');return;}
+  const lc=val.toLowerCase();
+  const matches=HC.filter(e=>String(e.noEmp||'').toLowerCase().includes(lc)||String(e.nombre||'').toLowerCase().includes(lc)).slice(0,8);
+  if(!matches.length){drop.classList.remove('show');return;}
+  drop.innerHTML=matches.map(e=>`<div class="si-item" onclick="abrirIncapacidadEmpleado('${esc(e.noEmp)}')"><div class="si-name">${e.nombre}</div><div class="si-meta">No.${e.noEmp} · ${e.planta||'—'} · ${e.depto||'—'}</div></div>`).join('');
+  drop.classList.add('show');
+}
+function abrirIncapacidadEmpleado(noEmp){
+  const emp=HC.find(x=>String(x.noEmp)===String(noEmp));
+  if(!emp){toast('Empleado no encontrado','err');return;}
+  openModal('mo-inc');
+  const q=document.getElementById('inc-eq'); if(q) q.value=`${emp.nombre} (No.${emp.noEmp})`;
+  const h=document.getElementById('inc-es'); if(h) h.value=emp.noEmp;
+  const c=document.getElementById('inc-ec'); if(c) c.innerHTML=buildEmpCardHtml(emp);
+  const d=document.getElementById('inc-open-drop'); if(d) d.classList.remove('show');
+}
+function initSimpleSearches(){
+  const incBox=document.getElementById('inc-open-search');
+  if(incBox && !incBox.innerHTML.trim()) incBox.innerHTML=buildIncBuscador();
+}
+
 // ── INICIO ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   cargarUsuariosLogin();
+  initSimpleSearches();
 });
 
 if(localStorage.getItem('so_dark')==='1') document.documentElement.classList.add('dark');
