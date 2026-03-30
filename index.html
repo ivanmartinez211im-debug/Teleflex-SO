@@ -6,7 +6,453 @@
 <title>AUNA Salud Ocupacional — Teleflex</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">
+// ════════════════════════════════════════════════════════════════
+// FORMULARIOS DE CAPTURA
+// ════════════════════════════════════════════════════════════════
+
+function renderCaptura(){
+  const ct=document.getElementById('cap-titulo');
+  if(ct) ct.textContent = USER.rol==='medico'?'Nueva valoración médica':'Nueva nota de enfermería';
+  const ch=document.getElementById('cap-emp-header');
+  if(ch) ch.innerHTML=buildCapBuscador();
+  const ca=document.getElementById('cap-alertas');
+  if(ca) ca.innerHTML='';
+  const cf=document.getElementById('cap-form-container');
+  if(cf) cf.innerHTML='';
+  _capEmp=null;
+}
+
+function buildCapFormEnf(emp){
+  const al=getAlergias(emp.noEmp);
+  return`<div class="card" style="margin-top:10px">
+  ${al?`<div style="background:#FEF9C3;border:1.5px solid #FDE047;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-weight:700;color:#854D0E">⚠️ Alergias: ${al}</div>`:''}
+  <div class="g2">
+    <div class="fi"><label>Fecha</label><input type="date" id="f-fecha" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="fi"><label>Hora</label><input type="time" id="f-hora" value="${new Date().toTimeString().slice(0,5)}"></div>
+    <div class="fi"><label>Turno</label><select id="f-turno"><option>Matutino</option><option>Vespertino</option><option>Tiempo extra</option></select></div>
+    <div class="fi"><label>Tipo</label><select id="f-tipo-cons"><option>Enfermedad general</option><option>Urgencia</option><option>Accidente de trabajo</option><option>Aplicación de tratamiento</option></select></div>
+  </div>
+  <div class="g4">
+    <div class="fi"><label>T/A</label><input type="text" id="f-ta" placeholder="120/80"></div>
+    <div class="fi"><label>FC</label><input type="number" id="f-fc" placeholder="72"></div>
+    <div class="fi"><label>Temp °C</label><input type="number" step="0.1" id="f-temp" placeholder="36.5"></div>
+    <div class="fi"><label>SpO₂ %</label><input type="number" id="f-spo2" placeholder="98"></div>
+    <div class="fi"><label>Glucosa</label><input type="number" id="f-glucosa" placeholder="100"></div>
+    <div class="fi"><label>Peso kg</label><input type="number" step="0.1" id="f-peso" placeholder="70"></div>
+  </div>
+  <div class="fi"><label>Motivo de consulta</label><textarea id="f-motivo" rows="2" placeholder="Describe el motivo..."></textarea></div>
+  <div class="fi" style="position:relative">
+    <label>Diagnóstico <span style="font-weight:400;font-size:10px;color:var(--tx3)">— escribe o busca CIE-10</span></label>
+    <input type="text" id="f-dg" placeholder="Ej: cefalea, dolor muscular, resfriado..." oninput="autoCIE(this)" autocomplete="off">
+    <div id="f-cie-drop" class="cie-drop" style="display:none;position:absolute;z-index:200;background:var(--bg);border:1.5px solid var(--tl);border-radius:8px;max-height:220px;overflow-y:auto;width:100%;left:0;top:100%;box-shadow:0 8px 24px rgba(0,0,0,.15)"></div>
+    <input type="hidden" id="f-cie">
+    <span id="f-cie-badge" style="display:none;background:#CCFBF1;color:#0D9488;font-family:monospace;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-top:4px;display:none"></span>
+  </div>
+  <div class="fi"><label>Plan / Tratamiento</label><textarea id="f-plan" rows="3" placeholder="Medicamentos, indicaciones..."></textarea></div>
+  <div class="fi"><label>Seguimiento</label><select id="f-seg"><option>Alta</option><option>Control</option><option>Referencia IMSS</option><option>Envío a urgencias</option></select></div>
+  <div class="fi"><label>Incapacidad</label><select id="f-inc" onchange="toggleIncFields(this.value)"><option>No</option><option>Sí - Enfermedad general</option><option>Sí - Riesgo de trabajo</option><option>Sí - Riesgo de trayecto</option><option>Sí - Maternidad</option></select></div>
+  <div id="f-inc-fields" style="display:none">
+    <div class="g3">
+      <div class="fi"><label>Folio IMSS</label><input type="text" id="f-inc-folio" placeholder="Opcional"></div>
+      <div class="fi"><label>Inicio</label><input type="date" id="f-inc-ini"></div>
+      <div class="fi"><label>Días</label><input type="number" id="f-inc-dias" oninput="calcIncFin()"></div>
+    </div>
+    <div class="fi"><label>Retorno</label><input type="date" id="f-inc-fin" readonly></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+    <button class="btn" onclick="guardarConsulta('ENF')">💾 Guardar</button>
+    <button class="btn btn-gh" onclick="imprimirConstancia()">🖨️ Constancia</button>
+  </div>
+</div>`;
+}
+
+function buildCapFormMed(emp){
+  const cr=getCronicos(emp.noEmp);
+  const al=getAlergias(emp.noEmp);
+  return`<div class="card" style="margin-top:10px">
+  ${al?`<div style="background:#FEF9C3;border:1.5px solid #FDE047;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-weight:700;color:#854D0E">⚠️ Alergias: ${al}</div>`:''}
+  <div class="g2">
+    <div class="fi"><label>Fecha</label><input type="date" id="f-fecha" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="fi"><label>Hora</label><input type="time" id="f-hora" value="${new Date().toTimeString().slice(0,5)}"></div>
+    <div class="fi"><label>Turno</label><select id="f-turno"><option>Matutino</option><option>Vespertino</option><option>Tiempo extra</option></select></div>
+    <div class="fi"><label>Tipo</label><select id="f-tipo-cons"><option>Valoración médica</option><option>Urgencia</option><option>Accidente de trabajo</option><option>Aplicación de tratamiento</option></select></div>
+  </div>
+  <div class="g4">
+    <div class="fi"><label>T/A</label><input type="text" id="f-ta" placeholder="120/80"></div>
+    <div class="fi"><label>FC</label><input type="number" id="f-fc" placeholder="72"></div>
+    <div class="fi"><label>FR</label><input type="number" id="f-fr" placeholder="16"></div>
+    <div class="fi"><label>Temp °C</label><input type="number" step="0.1" id="f-temp" placeholder="36.5"></div>
+    <div class="fi"><label>SpO₂ %</label><input type="number" id="f-spo2" placeholder="98"></div>
+    <div class="fi"><label>Glucosa</label><input type="number" id="f-glucosa" placeholder="100"></div>
+    <div class="fi"><label>Peso kg</label><input type="number" step="0.1" id="f-peso" placeholder="70" oninput="calcIMCf()"></div>
+    <div class="fi"><label>Talla m</label><input type="number" step="0.01" id="f-talla" placeholder="1.65" oninput="calcIMCf()"></div>
+  </div>
+  <div class="fi"><label>Motivo de consulta</label><textarea id="f-motivo" rows="2" placeholder="Motivo de la consulta..."></textarea></div>
+  <div class="fi"><label>Enfermedades crónicas</label><input type="text" id="f-cronicos" value="${cr||''}" placeholder="DM2, HTA, asma..."></div>
+  <div class="fi"><label>Alergias</label><input type="text" id="f-alergias" value="${al||''}" placeholder="Alergias conocidas..."></div>
+  <div class="fi" style="position:relative">
+    <label>Diagnóstico <span style="font-weight:400;font-size:10px;color:var(--tx3)">— escribe libremente, el CIE-10 se sugiere solo</span></label>
+    <input type="text" id="f-dg" placeholder="Ej: cefalea, hipertensión, lumbalgia, resfriado..." oninput="autoCIE(this)" autocomplete="off">
+    <div id="f-cie-drop" class="cie-drop" style="display:none;position:absolute;z-index:200;background:var(--bg);border:1.5px solid var(--tl);border-radius:8px;max-height:220px;overflow-y:auto;width:100%;left:0;top:100%;box-shadow:0 8px 24px rgba(0,0,0,.15)"></div>
+    <input type="hidden" id="f-cie">
+    <span id="f-cie-badge" style="display:none;background:#CCFBF1;color:#0D9488;font-family:monospace;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-top:4px"></span>
+  </div>
+  <div class="fi"><label>Exploración física</label><textarea id="f-exploracion" rows="2" placeholder="Hallazgos relevantes..."></textarea></div>
+  <div class="fi"><label>Plan / Tratamiento</label><textarea id="f-plan" rows="3" placeholder="Medicamentos, dosis, indicaciones..."></textarea></div>
+  <div class="fi"><label>Seguimiento</label><select id="f-seg"><option>Alta</option><option>Control</option><option>Referencia especialidad</option><option>Referencia IMSS</option><option>Envío a urgencias</option></select></div>
+  <div class="fi"><label>Incapacidad</label><select id="f-inc" onchange="toggleIncFields(this.value)"><option>No</option><option>Sí - Enfermedad general</option><option>Sí - Riesgo de trabajo</option><option>Sí - Riesgo de trayecto</option><option>Sí - Maternidad</option></select></div>
+  <div id="f-inc-fields" style="display:none">
+    <div class="g3">
+      <div class="fi"><label>Folio IMSS</label><input type="text" id="f-inc-folio" placeholder="Opcional"></div>
+      <div class="fi"><label>Inicio</label><input type="date" id="f-inc-ini"></div>
+      <div class="fi"><label>Días</label><input type="number" id="f-inc-dias" oninput="calcIncFin()"></div>
+    </div>
+    <div class="fi"><label>Retorno</label><input type="date" id="f-inc-fin" readonly></div>
+  </div>
+  <div class="fi"><label>Próxima cita</label><input type="date" id="f-prox"></div>
+  <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+    <button class="btn" onclick="guardarConsulta('MED')">💾 Guardar</button>
+    <button class="btn btn-gh" onclick="imprimirNotaMed()">📄 Nota</button>
+    <button class="btn btn-gh" onclick="imprimirReceta()">💊 Receta</button>
+    <button class="btn btn-gh" onclick="imprimirST7()">📑 ST-7</button>
+    <button class="btn btn-gh" onclick="imprimirConstancia()">🖨️ Constancia</button>
+  </div>
+</div>`;
+}
+
+
+function toggleIncFields(v){
+  const el=document.getElementById('f-inc-fields');
+  if(el) el.style.display=v==='No'?'none':'block';
+}
+
+function calcIncFin(){
+  const ini=document.getElementById('f-inc-ini');
+  const dias=document.getElementById('f-inc-dias');
+  const fin=document.getElementById('f-inc-fin');
+  if(!ini||!dias||!fin||!ini.value||!dias.value) return;
+  const d=new Date(ini.value+'T12:00');
+  d.setDate(d.getDate()+parseInt(dias.value));
+  fin.value=d.toISOString().split('T')[0];
+}
+
+// ════════════════════════════════════════════════════════════════
+// USUARIOS
+// ════════════════════════════════════════════════════════════════
+
+function renderUsuarios(){
+  const USR=ld(SK.usr)||[];
+  document.getElementById('usr-list').innerHTML=USR.length?USR.map(u=>`
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;margin-bottom:8px">
+      <div>
+        <div style="font-weight:700">${u.nombre}</div>
+        <div style="font-size:11px;color:var(--tx3)">${u.user} · ${u.rol} · ${u.planta||'—'}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="pill ${u.activo==='Sí'?'pgr':'pgy'}">${u.activo==='Sí'?'Activo':'Inactivo'}</span>
+        ${USER.rol==='medico'?`<button class="btn btn-gh btn-xs" onclick="toggleUsuario('${u.user}','${u.activo==='Sí'?'No':'Sí'}')">${u.activo==='Sí'?'Desactivar':'Activar'}</button>`:''}
+      </div>
+    </div>`).join(''):'<div class="empty"><div class="empty-i">👥</div>Sin usuarios registrados</div>';
+}
+
+async function toggleUsuario(user,nuevoEstado){
+  await gasPost({action:'toggleUsuario',user,activo:nuevoEstado});
+  const USR=ld(SK.usr)||[];
+  const u=USR.find(x=>x.user===user);
+  if(u){u.activo=nuevoEstado;sv(SK.usr,USR);}
+  renderUsuarios();
+  toast(nuevoEstado==='Sí'?'Usuario activado':'Usuario desactivado','ok');
+}
+
+// ════════════════════════════════════════════════════════════════
+// IMPRESIONES
+// ════════════════════════════════════════════════════════════════
+
+function getLogoHeader(medico,cedula){
+  const med=medico||'Dr. Jaime Iván Martínez Espinoza';
+  const ced=cedula||'12021447';
+  return`<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:3px solid #0F2942;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:13px;font-weight:800;color:#0D6B5E">AUNA<br><span style="font-size:10px;color:#B8962E;font-weight:700;letter-spacing:1px">SALUD OCUPACIONAL</span></div>
+    </div>
+    <div style="text-align:right;font-size:10px;color:#64748B;line-height:1.6">
+      <strong style="color:#0F2942;font-size:11px">Teleflex Medical de México S.A. de C.V.</strong><br>
+      ${med}${ced?' · Cédula: '+ced:''}<br>
+      Medicina del Trabajo · NOM-030-STPS
+    </div>
+  </div>`;
+}
+
+function abrirVentanaImpresion(titulo,contenido){
+  const w=window.open('','_blank','width=860,height=900');
+  if(!w){toast('Popup bloqueado — permite ventanas emergentes','err');return;}
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}<\/title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:11.5px;background:#fff;color:#0F172A;padding:20px}
+    @page{size:letter;margin:12mm 14mm}
+    @media print{.no-print{display:none!important}}
+    .page{max-width:720px;margin:0 auto}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+    .sec{margin-bottom:14px}
+    .sec-t{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748B;border-bottom:1.5px solid #E2E8F0;padding-bottom:4px;margin-bottom:8px}
+    .f label{font-size:9px;color:#94A3B8;text-transform:uppercase;display:block;margin-bottom:2px}
+    .f span{font-size:12px;font-weight:600;display:block;min-height:16px}
+    .pac{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px;margin-bottom:14px}
+    .sig-area{display:flex;justify-content:space-between;margin-top:40px;gap:20px}
+    .sig-box{text-align:center;min-width:180px}
+    .sig-line{border-top:1.5px solid #0F2942;padding-top:5px;font-size:11px;font-weight:700;margin-top:30px}
+    .btn-print{position:fixed;bottom:16px;right:16px;background:#0F2942;color:#fff;border:none;padding:11px 22px;border-radius:9px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit}
+    table{width:100%;border-collapse:collapse}
+    th{background:#0F2942;color:#fff;padding:7px 10px;text-align:left;font-size:10px}
+    td{padding:7px 10px;border-bottom:1px solid #E2E8F0;font-size:11px}
+    tr:nth-child(even) td{background:#F8FAFC}
+  <\/style><\/head><body>
+  <div class="page">${contenido}<\/div>
+  <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / PDF<\/button>
+  <\/body><\/html>`);
+  w.document.close();
+  setTimeout(()=>w.print(),700);
+}
+
+function getNota(r){
+  if(!r)return'';
+  const emp=_empActual||{};
+  const fecha=new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+  const tipoLabel=r.tipoAtencion==='ENF'?'Nota de Enfermería':'Valoración Médica';
+  const reg=r.registradoPor||'Dr. Jaime Iván Martínez Espinoza';
+  const ced=r.tipoAtencion==='MED'?'12021447':'';
+  return`${getLogoHeader(reg,ced)}
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-size:16px;font-weight:800;color:#0F2942">${tipoLabel}</div>
+    <div style="font-family:monospace;font-size:11px;background:#F1F5F9;padding:3px 10px;border-radius:5px">${r.folio||''}</div>
+  </div>
+  <div class="pac g2">
+    <div class="f"><label>Paciente</label><span>${r.nombre||emp.nombre||'—'}</span></div>
+    <div class="f"><label>No. Empleado</label><span>${r.noEmp||emp.noEmp||'—'}</span></div>
+    <div class="f"><label>NSS</label><span>${r.nss||emp.nss||'—'}</span></div>
+    <div class="f"><label>Planta</label><span>${r.planta||emp.planta||'—'}</span></div>
+    <div class="f"><label>Departamento</label><span>${r.depto||emp.depto||'—'}</span></div>
+    <div class="f"><label>Fecha</label><span>${r.fecha||fecha}${r.hora?' · '+r.hora:''}</span></div>
+  </div>
+  ${r.ta||r.fc||r.temp?`<div class="sec"><div class="sec-t">Signos vitales</div><div class="g4">
+    ${r.ta?`<div class="f"><label>T/A</label><span>${r.ta}</span></div>`:''}
+    ${r.fc?`<div class="f"><label>FC</label><span>${r.fc} lpm</span></div>`:''}
+    ${r.temp?`<div class="f"><label>Temp</label><span>${r.temp}°C</span></div>`:''}
+    ${r.spo2?`<div class="f"><label>SpO₂</label><span>${r.spo2}%</span></div>`:''}
+    ${r.glucosa?`<div class="f"><label>Glucosa</label><span>${r.glucosa} mg/dL</span></div>`:''}
+  </div></div>`:''}
+  ${r.motivoConsulta?`<div class="sec"><div class="sec-t">Motivo</div><p>${r.motivoConsulta}</p></div>`:''}
+  <div class="sec"><div class="sec-t">Diagnóstico</div>
+    ${r.cie10?`<span style="background:#CCFBF1;color:#0D9488;padding:2px 8px;border-radius:4px;font-family:monospace;font-weight:700;margin-right:6px">${r.cie10}</span>`:''}
+    <strong>${r.diagnostico||'—'}</strong>
+  </div>
+  ${r.plan?`<div class="sec"><div class="sec-t">Plan y tratamiento</div><p style="line-height:1.7">${r.plan}</p></div>`:''}
+  ${r.incapacidad&&r.incapacidad!=='No'?`<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;padding:10px;margin-bottom:12px">
+    <strong>Incapacidad:</strong> ${r.incapacidad} · ${r.incDias||'—'} días (${r.incInicio||'—'} al ${r.incFin||'—'})
+  </div>`:''}
+  <div class="sig-area">
+    <div class="sig-box"><div class="sig-line">${reg}${ced?'<br><small>Cédula '+ced+'</small>':''}</div></div>
+    <div class="sig-box"><div class="sig-line">Firma del trabajador<br>${r.nombre||emp.nombre||'—'}</div></div>
+  </div>`;
+}
+
+function imprimirNotaMed(){
+  const r=buildConsultaFromForm();
+  abrirVentanaImpresion('Nota Médica',getNota({...r,tipoAtencion:'MED'}));
+}
+
+function imprimirNotaMedFolio(folio){
+  const r=CONS.find(c=>c.folio===folio);
+  if(!r){toast('Consulta no encontrada','err');return;}
+  abrirVentanaImpresion('Nota Médica',getNota(r));
+}
+
+function imprimirConstancia(){
+  const r=buildConsultaFromForm();
+  const emp=_empActual||{};
+  const fecha=new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+  const contenido=`${getLogoHeader()}
+  <div style="font-size:16px;font-weight:800;color:#0F2942;margin-bottom:12px;text-align:center">CONSTANCIA DE ATENCIÓN MÉDICA</div>
+  <p style="margin-bottom:14px;line-height:1.8">Se hace constar que el/la C. <strong>${r.nombre||emp.nombre||'—'}</strong>, No. Empleado <strong>${r.noEmp||emp.noEmp||'—'}</strong>, trabajador/a de <strong>Teleflex Medical de México S.A. de C.V.</strong>, planta <strong>${r.planta||emp.planta||'—'}</strong>, recibió atención médica el día <strong>${r.fecha||fecha}</strong>.</p>
+  <div class="pac"><div class="g2">
+    <div class="f"><label>Diagnóstico</label><span>${r.diagnostico||'—'}</span></div>
+    <div class="f"><label>Tratamiento</label><span>${r.plan||'Indicaciones médicas'}</span></div>
+    <div class="f"><label>Seguimiento</label><span>${r.seguimiento||'Alta'}</span></div>
+    <div class="f"><label>Próxima cita</label><span>${r.proxCita||'No aplica'}</span></div>
+  </div></div>
+  <p style="margin-top:14px;font-size:10px;color:#64748B">Se expide la presente constancia a petición del interesado para los fines que considere convenientes.</p>
+  <div class="sig-area"><div class="sig-box"><div class="sig-line">Dr. Jaime Iván Martínez Espinoza<br><small>Cédula 12021447 · Medicina del Trabajo</small></div></div></div>`;
+  abrirVentanaImpresion('Constancia',contenido);
+}
+
+function imprimirConstanciaFolio(folio){
+  const r=CONS.find(c=>c.folio===folio);
+  if(!r){toast('Consulta no encontrada','err');return;}
+  _consultaActual=r;
+  imprimirConstancia();
+}
+
+function imprimirConstanciaInc(folio){
+  const r=INC.find(i=>i.folio===folio);
+  if(!r){toast('Incapacidad no encontrada','err');return;}
+  const fecha=new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+  const contenido=`${getLogoHeader()}
+  <div style="font-size:15px;font-weight:800;color:#0F2942;margin-bottom:12px;text-align:center">CONSTANCIA DE INCAPACIDAD</div>
+  <div class="pac g2">
+    <div class="f"><label>Trabajador</label><span>${r.nombre||'—'}</span></div>
+    <div class="f"><label>No. Empleado</label><span>${r.noEmp||'—'}</span></div>
+    <div class="f"><label>NSS</label><span>${r.nss||'—'}</span></div>
+    <div class="f"><label>Planta</label><span>${r.planta||'—'}</span></div>
+    <div class="f"><label>Tipo</label><span>${r.tipo||r.incapacidad||'—'}</span></div>
+    <div class="f"><label>Folio IMSS</label><span>${r.folio||'—'}</span></div>
+    <div class="f"><label>Inicio</label><span>${r.incInicio||'—'}</span></div>
+    <div class="f"><label>Días</label><span>${r.incDias||'—'}</span></div>
+    <div class="f"><label>Fin / Retorno</label><span>${r.incFin||'—'}</span></div>
+    <div class="f"><label>Diagnóstico</label><span>${r.diagnostico||r.tipo||'—'}</span></div>
+  </div>
+  <div class="sig-area"><div class="sig-box"><div class="sig-line">Dr. Jaime Iván Martínez Espinoza<br><small>Cédula 12021447</small></div></div></div>`;
+  abrirVentanaImpresion('Constancia Incapacidad',contenido);
+}
+
+function imprimirReceta(){
+  const r=buildConsultaFromForm();
+  const emp=_empActual||{};
+  const fecha=new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+  const contenido=`${getLogoHeader()}
+  <div style="font-size:15px;font-weight:800;color:#0F2942;margin-bottom:12px">RECETA MÉDICA</div>
+  <div class="pac g2">
+    <div class="f"><label>Paciente</label><span>${r?r.nombre:emp.nombre||'—'}</span></div>
+    <div class="f"><label>No. Empleado</label><span>${r?r.noEmp:emp.noEmp||'—'}</span></div>
+    <div class="f"><label>Fecha</label><span>${fecha}</span></div>
+    <div class="f"><label>Diagnóstico</label><span>${r?r.diagnostico:'—'}</span></div>
+  </div>
+  <div class="sec"><div class="sec-t">Prescripción</div>
+  <div style="min-height:120px;border:1px solid #E2E8F0;border-radius:6px;padding:12px;line-height:1.8">${r&&r.plan?r.plan.replace(/\n/g,'<br>'):'&nbsp;'}</div></div>
+  <div class="sig-area"><div class="sig-box"><div class="sig-line">Dr. Jaime Iván Martínez Espinoza<br><small>Cédula 12021447 · Medicina del Trabajo</small></div></div></div>`;
+  abrirVentanaImpresion('Receta',contenido);
+}
+
+function imprimirST7(){
+  const r=buildConsultaFromForm();
+  const emp=_empActual||{};
+  const fecha=new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+  const contenido=`${getLogoHeader()}
+  <div style="font-size:15px;font-weight:800;color:#0F2942;margin-bottom:4px">AVISO DE ATENCIÓN MÉDICA INICIAL Y CALIFICACIÓN DE PROBABLE ACCIDENTE DE TRABAJO</div>
+  <div style="font-size:11px;color:#64748B;margin-bottom:12px">Formato ST-7 — NOM-021-STPS</div>
+  <div class="pac">
+  <div class="g2">
+    <div class="f"><label>Nombre del trabajador</label><span>${r?r.nombre:emp.nombre||'—'}</span></div>
+    <div class="f"><label>No. Empleado</label><span>${r?r.noEmp:emp.noEmp||'—'}</span></div>
+    <div class="f"><label>NSS</label><span>${r?r.nss:emp.nss||'—'}</span></div>
+    <div class="f"><label>Puesto</label><span>${emp.puesto||'—'}</span></div>
+    <div class="f"><label>Departamento</label><span>${r?r.depto:emp.depto||'—'}</span></div>
+    <div class="f"><label>Fecha del accidente</label><span>${r?r.fecha:fecha}</span></div>
+    <div class="f"><label>Hora</label><span>${r?r.hora||'—':'—'}</span></div>
+    <div class="f"><label>Planta</label><span>${r?r.planta:emp.planta||'—'}</span></div>
+  </div></div>
+  <div class="sec"><div class="sec-t">Descripción del accidente / lesión</div>
+  <div style="min-height:80px;border:1px solid #E2E8F0;border-radius:6px;padding:10px;line-height:1.7">${r&&r.motivoConsulta?r.motivoConsulta:'—'}</div></div>
+  <div class="sec"><div class="sec-t">Diagnóstico</div>
+  <p><strong>${r?r.diagnostico||'—':'—'}</strong></p></div>
+  <div class="sec"><div class="sec-t">Tratamiento</div>
+  <p>${r&&r.plan?r.plan:'—'}</p></div>
+  <div class="sig-area">
+    <div class="sig-box"><div class="sig-line">Médico tratante<br>Dr. Jaime Iván Martínez Espinoza<br><small>Cédula 12021447</small></div></div>
+    <div class="sig-box"><div class="sig-line">Firma del trabajador<br>${r?r.nombre:emp.nombre||'—'}</div></div>
+  </div>`;
+  abrirVentanaImpresion('ST-7',contenido);
+}
+
+function imprimirST7Folio(folio){
+  const r=CONS.find(c=>c.folio===folio);
+  if(!r){toast('Consulta no encontrada','err');return;}
+  _consultaActual=r;imprimirST7();
+}
+
+function imprimirPlanNutFolio(folio){
+  toast('Módulo de nutrición en aplicación independiente','err');
+}
+
+function buildConsultaFromForm(){
+  const g=id=>document.getElementById(id)?.value||'';
+  return{
+    folio:'TEMP-'+Date.now(),
+    fecha:g('f-fecha'),hora:g('f-hora'),
+    noEmp:_empActual?.noEmp||'',nombre:_empActual?.nombre||'',
+    planta:_empActual?.planta||'',depto:_empActual?.depto||'',
+    nss:_empActual?.nss||'',
+    tipoAtencion:USER?.rol==='medico'?'MED':'ENF',
+    turno:g('f-turno'),
+    motivoConsulta:g('f-motivo'),
+    cie10:g('f-cie')||'',diagnostico:g('f-dg')||'Consulta general',
+    plan:g('f-plan'),seguimiento:g('f-seg'),
+    incapacidad:g('f-inc'),
+    registradoPor:USER?.nombre||''
+  };
+}
+
+function cargarExtAutocomplete(){
+  // Autocomplete for external employee modal
+  const inp=document.getElementById('ext-nombre');
+  if(inp) inp.focus();
+}
+
+// Fix #inc-cta missing element
+function renderInc(){
+  _incFiltro={};
+  const fp=g('if-planta')||'';
+  const fturno=g('if-turno')||'';
+  const ftipo=g('if-tipo')||'';
+  const fbusq=g('if-q')||'';
+  let lista=[...INC];
+  if(fp)lista=lista.filter(r=>normEq(r.planta,fp));
+  if(fturno)lista=lista.filter(r=>normEq(r.turno,fturno));
+  if(ftipo)lista=lista.filter(r=>normInc(r.tipo||r.incapacidad,ftipo));
+  if(fbusq){const q=norm(fbusq);lista=lista.filter(r=>norm(r.nombre).includes(q)||String(r.noEmp).includes(fbusq));}
+  lista.sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
+  const activas=lista.filter(r=>incActivaCheck(r));
+  const diasInc=lista.reduce((s,r)=>s+(parseInt(r.incDias)||0),0);
+  const prolongadas=lista.filter(r=>(parseInt(r.incDias)||0)>=28);
+  // KPIs
+  const setK=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  setK('ki-act',activas.length);
+  setK('ki-dias',diasInc);
+  setK('ki-prol',prolongadas.length);
+  setK('ki-tot',lista.length);
+  // Render list
+  const el=document.getElementById('inc-list');
+  if(!el)return;
+  if(!lista.length){el.innerHTML='<div class="empty"><div class="empty-i">📋</div>Sin incapacidades registradas</div>';return;}
+  el.innerHTML=lista.map(r=>{
+    const activa=incActivaCheck(r);
+    const esProlongada=(parseInt(r.incDias)||0)>=28;
+    const tipo=r.tipo||r.incapacidad||'—';
+    const tc=normInc(tipo,'maternidad')?'ppu':normInc(tipo,'trabajo')||normInc(tipo,'trayecto')?'prd':'ptl';
+    return`<div class="card" style="padding:12px 16px;margin-bottom:8px;border-left:3px solid ${activa?'var(--rd)':'var(--bor)'}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px">
+        <div>
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-weight:700">${r.nombre||'—'}</span>
+            <span class="pill ${tc}">${tipo}</span>
+            ${activa?'<span class="pill pgr">🟢 Activa</span>':'<span class="pill pgy">Fin.</span>'}
+            ${esProlongada?'<span class="pill ppu">⏳ Prolongada</span>':''}
+            ${r.folio&&!r.folio.startsWith('INC-')?`<span class="folio" title="Folio IMSS">${r.folio}</span>`:''}
+          </div>
+          <div style="font-size:11px;color:var(--tx3)">No.${r.noEmp||'—'} · ${r.planta||'—'} · Inicio: ${r.incInicio||'—'} · ${r.incDias||'?'} días · Retorno: ${r.incFin||'—'}</div>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-gh btn-xs" onclick="imprimirConstanciaInc('${esc(r.folio||'')}')">🖨️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -175,7 +621,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--sf2);
 /* ── CIE-10 ── */
 .cie10-drop{position:absolute;top:calc(100%+3px);left:0;right:0;background:var(--sf);border:1.5px solid var(--bor);border-radius:10px;box-shadow:var(--shl);z-index:300;max-height:240px;overflow-y:auto;display:none}
 .cie10-item{padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--sf3);font-size:12px;transition:.1s}
-.cie10-item:hover{background:var(--tl3)}.cie10-item:last-child{border-bottom:none}
+.cie10-item:hover,.cie10-item.cie10-active{background:var(--tl3)}.cie10-item:last-child{border-bottom:none}
 
 /* ── TABS ── */
 .tabs{display:flex;gap:3px;border-bottom:2px solid var(--bor);margin-bottom:14px;overflow-x:auto}
@@ -705,7 +1151,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--sf2);
           <select id="inc-sec"><option>Inicial</option><option>Subsecuente</option><option>Alta</option></select></div>
       </div>
       <div class="fi"><label>CIE-10 *</label>
-        <div style="position:relative"><input type="text" id="inc-cq" placeholder="Busca por código o descripción..." oninput="buscarCIE10Input(this,'inc-cd','inc-cv','inc-dg')" autocomplete="off"><div class="cie10-drop" id="inc-cd"></div></div>
+        <div style="position:relative"><input type="text" id="inc-cq" placeholder="Opcional: busca por código o descripción..." oninput="buscarCIE10Input(this,'inc-cd','inc-cv','inc-dg')" autocomplete="off"><div class="cie10-drop" id="inc-cd"></div></div>
         <input type="hidden" id="inc-cv"></div>
       <div class="fi"><label>Diagnóstico</label><input type="text" id="inc-dg" placeholder="Descripción diagnóstica..."></div>
       <div class="g3">
@@ -1133,10 +1579,11 @@ function renderExpAlertasLocal(noEmp){
 // PANEL CAPTURA DINÁMICO
 // ════════════════════════════════════════════════════════════════
 function renderPanelCaptura(emp){
-  const panel=document.getElementById('panel-captura');
-  if(USER.rol==='enfermeria') panel.innerHTML=buildFormEnf(emp);
-  else if(USER.rol==='medico') panel.innerHTML=buildFormMed(emp);
-
+  const panelConsulta=document.getElementById('cap-form-container');
+  const panelHistorial=document.getElementById('panel-captura');
+  const html=USER.rol==='enfermeria'?buildFormEnf(emp):USER.rol==='medico'?buildFormMed(emp):'';
+  if(panelConsulta) panelConsulta.innerHTML=html;
+  if(panelHistorial) panelHistorial.innerHTML=html;
 }
 function getAlergias(noEmp){const lc=String(noEmp||'').toLowerCase();return[...new Set(CONS.filter(c=>String(c.noEmp||'').toLowerCase()===lc).flatMap(c=>(c.alergias||'').split(/[,;]+/).map(x=>x.trim()).filter(Boolean)))].join(', ');}
 function getCronicos(noEmp){const lc=String(c=>{}).toString();const lc2=String(noEmp||'').toLowerCase();return[...new Set(CONS.filter(c=>String(c.noEmp||'').toLowerCase()===lc2).flatMap(c=>(c.cronicos||'').split(/[,;]+/).map(x=>x.trim()).filter(Boolean)))].join(', ');}
@@ -1147,7 +1594,7 @@ function buildFormEnf(emp){
   <div class="g2"><div class="fi" style="margin:0"><label>Tipo de consulta *</label><select id="f-tipo"><option>Enfermedad general</option><option>Riesgo de trabajo</option><option>Riesgo de trayecto</option><option>Control crónico</option><option>Urgencia</option><option>Seguimiento</option></select></div><div class="fi" style="margin:0"><label>Alergias</label><input type="text" id="f-al" value="${esc(al)}" placeholder="Penicilina, látex..."></div></div>
   <div class="sec-t" style="margin-top:12px">Signos vitales</div>
   <div class="g4"><div class="fi" style="margin:0"><label>T/A</label><input type="text" id="f-ta" placeholder="120/80"></div><div class="fi" style="margin:0"><label>FC (lpm)</label><input type="number" id="f-fc"></div><div class="fi" style="margin:0"><label>FR (rpm)</label><input type="number" id="f-fr"></div><div class="fi" style="margin:0"><label>Temp (°C)</label><input type="number" step=".1" id="f-temp"></div><div class="fi" style="margin:0"><label>Peso (kg)</label><input type="number" step=".1" id="f-peso"></div><div class="fi" style="margin:0"><label>Talla (cm)</label><input type="number" id="f-talla"></div><div class="fi" style="margin:0"><label>SpO₂ (%)</label><input type="number" id="f-spo2"></div><div class="fi" style="margin:0"><label>Glucosa</label><input type="number" id="f-gluc"></div></div>
-  <div class="fi" style="margin-top:8px"><label>CIE-10 / Diagnóstico *</label><div style="position:relative"><input type="text" id="f-cq" placeholder="Busca por código o descripción..." oninput="buscarCIE10Input(this,'f-cd','f-cv','f-dg')" autocomplete="off"><div class="cie10-drop" id="f-cd"></div></div><input type="hidden" id="f-cv"></div>
+  <div class="fi" style="margin-top:8px"><label>CIE-10 / Diagnóstico (opcional)</label><div style="position:relative"><input type="text" id="f-cq" placeholder="Opcional: busca por código o descripción..." oninput="buscarCIE10Input(this,'f-cd','f-cv','f-dg')" autocomplete="off"><div class="cie10-drop" id="f-cd"></div></div><input type="hidden" id="f-cv"></div>
   <div class="fi"><label>Diagnóstico</label><input type="text" id="f-dg" placeholder="Descripción diagnóstica..."></div>
   <div class="fi"><label>Enfermedades crónicas</label><input type="text" id="f-cr" value="${esc(cr)}" placeholder="DM2, HAS..."></div>
   <div class="fi"><label>Tratamiento / Plan</label><textarea id="f-plan" rows="2" placeholder="Medicamentos, indicaciones..."></textarea></div>
@@ -1168,7 +1615,7 @@ function buildFormMed(emp){
   <div class="fi" style="margin-top:4px"><label>IMC (auto)</label><input type="text" id="f-imc" readonly class="auto" placeholder="Se calcula automáticamente"></div>
   <div class="sec-t" style="margin-top:10px">Exploración por sistemas</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:12px">${apHtml}</div>
-  <div class="fi"><label>CIE-10 / Diagnóstico *</label><div style="position:relative"><input type="text" id="f-cq" placeholder="Busca por código o descripción..." oninput="buscarCIE10Input(this,'f-cd','f-cv','f-dg')" autocomplete="off"><div class="cie10-drop" id="f-cd"></div></div><input type="hidden" id="f-cv"></div>
+  <div class="fi"><label>CIE-10 / Diagnóstico (opcional)</label><div style="position:relative"><input type="text" id="f-cq" placeholder="Opcional: busca por código o descripción..." oninput="buscarCIE10Input(this,'f-cd','f-cv','f-dg')" autocomplete="off"><div class="cie10-drop" id="f-cd"></div></div><input type="hidden" id="f-cv"></div>
   <div class="fi"><label>Diagnóstico</label><input type="text" id="f-dg" placeholder="Descripción diagnóstica..."></div>
   <div class="g2"><div class="fi" style="margin:0"><label>Alergias</label><input type="text" id="f-al" value="${esc(al)}" placeholder="Penicilina, látex..."></div><div class="fi" style="margin:0"><label>Enfermedades crónicas</label><input type="text" id="f-cr" value="${esc(cr)}" placeholder="DM2, HAS..."></div></div>
   <div class="fi"><label>Plan y tratamiento</label><textarea id="f-plan" rows="3" placeholder="Medicamentos, indicaciones, dosis..."></textarea></div>
@@ -1208,8 +1655,8 @@ function toggleIncBlock(){const v=g('f-incap');const b=document.getElementById('
 // ════════════════════════════════════════════════════════════════
 async function guardarConsulta(tipo){
   const emp=_capEmp||_empActual;if(!emp){toast('Selecciona un empleado primero','err');return;}
-  let diag=g('f-dg');
-  if(!diag){toast('El diagnóstico es obligatorio — escríbelo o selecciona un CIE-10','err');return;}
+  const diag=g('f-dg')||'Consulta general';
+  const cie10val=g('f-cie')||'';
   const ahora=new Date();
   const folio=tipo+'-'+Date.now().toString().slice(-6);
   const APS=['Cabeza y cuello','Cardiovascular','Respiratorio','Digestivo','Genitourinario','Musculoesquelético','Neurológico','Dermatológico'];
@@ -1345,16 +1792,68 @@ async function guardarExpediente(){
 // CIE-10
 // ════════════════════════════════════════════════════════════════
 function buscarCIE10Input(inp,dropId,hiddenId,diagId){
-  const val=(inp.value||'').trim();const drop=document.getElementById(dropId);
-  if(!val||val.length<2){if(drop)drop.style.display='none';return;}
-  const res=buscarCIE10(val);if(!res.length){if(drop)drop.style.display='none';return;}
-  if(drop){drop.innerHTML=res.map(r=>`<div class="cie10-item" onclick="selCIE10('${r.c}','${esc(r.d)}','${r.s}','${dropId}','${hiddenId}','${diagId}','${inp.id}')"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--tl);font-size:11px">${r.c}</span><span style="margin-left:8px">${r.d}</span><span style="float:right;font-size:10px;color:var(--tx3);background:var(--sf3);padding:1px 6px;border-radius:4px">${r.s}</span></div>`).join('');drop.style.display='block';}
+  const val=(inp.value||'').trim();
+  const drop=document.getElementById(dropId);
+  const hid=document.getElementById(hiddenId);
+  const badge=document.getElementById('f-cie-badge');
+
+  // Clear previous CIE selection if user is typing freely
+  if(hid) hid.value='';
+  if(badge) badge.style.display='none';
+
+  if(!val||val.length<2){
+    if(drop){drop.style.display='none';drop.innerHTML='';}
+    return;
+  }
+
+  const q=val.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const results=CIE10.filter(e=>{
+    const c=e.c.toLowerCase();
+    const d=e.d.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    return c.startsWith(q)||d.includes(q);
+  }).slice(0,8);
+
+  if(!results.length){
+    if(drop){drop.style.display='none';drop.innerHTML='';}
+    return;
+  }
+
+  if(drop){
+    drop.style.display='block';
+    drop.innerHTML=results.map(e=>`
+      <div class="cie-item" onclick="selCIE10('${e.c}','${e.d.replace(/'/g,"\\'")}','${dropId}','${hiddenId}','${diagId}')">
+        <span style="font-family:monospace;font-weight:700;color:#0D6B5E;min-width:48px;display:inline-block">${e.c}</span>
+        <span style="color:var(--tx)">${e.d}</span>
+      </div>`).join('');
+  }
 }
+
+function selCIE10(code,desc,dropId,hiddenId,diagId){
+  // Set the unified diagnosis field to description
+  const diagEl=document.getElementById(diagId);
+  if(diagEl) diagEl.value=desc;
+  // Store CIE code in hidden field
+  const hid=document.getElementById(hiddenId);
+  if(hid) hid.value=code;
+  // Show badge with CIE code
+  const badge=document.getElementById('f-cie-badge');
+  if(badge){badge.textContent=code;badge.style.display='inline-block';}
+  // Close dropdown
+  const drop=document.getElementById(dropId);
+  if(drop){drop.style.display='none';}
+}
+
+
 function selCIE10(code,desc,sis,dropId,hiddenId,diagId,inputId){
-  const drop=document.getElementById(dropId);if(drop)drop.style.display='none';
+  const drop=document.getElementById(dropId);if(drop){drop.style.display='none';drop.innerHTML='';}
   const hid=document.getElementById(hiddenId);if(hid)hid.value=code;
-  const inp=document.getElementById(inputId);if(inp)inp.value=code+' — '+desc;
-  const diag=document.getElementById(diagId);if(diag&&!diag.value)diag.value=desc;
+  const inp=document.getElementById(inputId);
+  if(inp){
+    inp.value=code+' — '+desc;
+    inp.dataset.selDesc=desc;
+  }
+  const diag=document.getElementById(diagId);
+  if(diag && (!diag.value || diag.value===diag.placeholder.replace('Ej. ','') || diag.value===(inp?.dataset.selDesc||''))) diag.value=desc;
 }
 const CIE10=[
   {c:'M54.5',d:'Lumbago no especificado',s:'Musculoesquelético'},{c:'M54.4',d:'Lumbociatalgia',s:'Musculoesquelético'},{c:'M54.2',d:'Cervicalgia',s:'Musculoesquelético'},{c:'M77.1',d:'Epicondilitis lateral',s:'Musculoesquelético'},{c:'M75.1',d:'Síndrome del manguito rotador',s:'Musculoesquelético'},{c:'M79.1',d:'Mialgia',s:'Musculoesquelético'},{c:'M25.5',d:'Dolor en articulación',s:'Musculoesquelético'},{c:'G54.2',d:'Síndrome del túnel carpiano',s:'Musculoesquelético'},{c:'M70.0',d:'Tenosinovitis De Quervain',s:'Musculoesquelético'},{c:'M62.8',d:'Espasmo muscular',s:'Musculoesquelético'},{c:'M72.2',d:'Fascitis plantar',s:'Musculoesquelético'},{c:'M17.1',d:'Gonartrosis primaria',s:'Musculoesquelético'},{c:'M47.8',d:'Espondiloartrosis',s:'Musculoesquelético'},
@@ -1922,11 +2421,53 @@ function initSimpleSearches(){
 }
 
 // ── INICIO ────────────────────────────────────────────────────────
+
+// ── CIE-10 AUTOSUGGEST ────────────────────────────────────────────
+function autoCIE(inp){
+  const val=(inp.value||'').trim();
+  const drop=document.getElementById('f-cie-drop');
+  const hid=document.getElementById('f-cie');
+  const badge=document.getElementById('f-cie-badge');
+  if(hid) hid.value='';
+  if(badge) badge.style.display='none';
+  if(!drop) return;
+  if(!val||val.length<2){drop.style.display='none';return;}
+  const q=val.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const src=typeof CIE10!=='undefined'?CIE10:[];
+  const results=src.filter(e=>{
+    const c=(e.c||'').toLowerCase();
+    const d=(e.d||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    return c.startsWith(q)||d.includes(q);
+  }).slice(0,10);
+  if(!results.length){drop.style.display='none';return;}
+  drop.style.display='block';
+  drop.innerHTML=results.map(e=>`<div onclick="pickCIE('${e.c}','${e.d.replace(/'/g,"\\'")}');event.stopPropagation()" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--bor);font-size:12px" onmouseover="this.style.background='var(--sf3)'" onmouseout="this.style.background=''">
+    <span style="font-family:monospace;font-weight:700;color:#0D6B5E;margin-right:8px">${e.c}</span>${e.d}
+  </div>`).join('');
+}
+
+function pickCIE(code,desc){
+  const inp=document.getElementById('f-dg');
+  const hid=document.getElementById('f-cie');
+  const drop=document.getElementById('f-cie-drop');
+  const badge=document.getElementById('f-cie-badge');
+  if(inp){inp.value=desc;inp.focus();}
+  if(hid) hid.value=code;
+  if(drop) drop.style.display='none';
+  if(badge){badge.textContent=code;badge.style.display='inline-block';}
+}
+
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#f-cie-drop')&&e.target.id!=='f-dg'){
+    const d=document.getElementById('f-cie-drop');
+    if(d) d.style.display='none';
+  }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   cargarUsuariosLogin();
   initSimpleSearches();
 });
-
 if(localStorage.getItem('so_dark')==='1') document.documentElement.classList.add('dark');
 </script>
 </body></html>
