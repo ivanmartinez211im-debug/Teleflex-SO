@@ -35,13 +35,30 @@ function buildCapFormEnf(emp){
     <div class="fi"><label>Tipo</label><select id="f-tipo-cons"><option>Enfermedad general</option><option>Urgencia</option><option>Accidente de trabajo</option><option>Aplicación de tratamiento</option></select></div>
   </div>
   <div class="g4">
-    <div class="fi"><label>T/A</label><input type="text" id="f-ta" placeholder="120/80"></div>
-    <div class="fi"><label>FC</label><input type="number" id="f-fc" placeholder="72"></div>
-    <div class="fi"><label>Temp °C</label><input type="number" step="0.1" id="f-temp" placeholder="36.5"></div>
-    <div class="fi"><label>SpO₂ %</label><input type="number" id="f-spo2" placeholder="98"></div>
-    <div class="fi"><label>Glucosa</label><input type="number" id="f-glucosa" placeholder="100"></div>
-    <div class="fi"><label>Peso kg</label><input type="number" step="0.1" id="f-peso" placeholder="70"></div>
+  <div class="fi"><label>T/A</label><input type="text" id="f-ta" placeholder="120/80"></div>
+  <div class="fi"><label>FC</label><input type="number" id="f-fc" placeholder="72"></div>
+  <div class="fi"><label>Temp °C</label><input type="number" step="0.1" id="f-temp" placeholder="36.5"></div>
+  <div class="fi"><label>SpO₂ %</label><input type="number" id="f-spo2" placeholder="98"></div>
+  <div class="fi"><label>Glucosa</label><input type="number" id="f-glucosa" placeholder="100"></div>
+
+  <!-- PESO -->
+  <div class="fi">
+    <label>Peso kg</label>
+    <input type="number" step="0.1" id="f-peso" placeholder="70" oninput="calcularIMC()">
   </div>
+
+  <!-- TALLA (NUEVO) -->
+  <div class="fi">
+    <label>Talla m</label>
+    <input type="number" step="0.01" id="f-talla" placeholder="1.70" oninput="calcularIMC()">
+  </div>
+
+  <!-- IMC (RESULTADO) -->
+  <div class="fi">
+    <label>IMC</label>
+    <input type="number" id="f-imc" readonly placeholder="0.00">
+  </div>
+</div>
   <div class="fi"><label>Motivo de consulta</label><textarea id="f-motivo" rows="2" placeholder="Describe el motivo..."></textarea></div>
   <div class="fi" style="position:relative">
     <label>Diagnóstico <span style="font-weight:400;font-size:10px;color:var(--tx3)">— escribe o busca CIE-10</span></label>
@@ -80,15 +97,30 @@ function buildCapFormMed(emp){
     <div class="fi"><label>Tipo</label><select id="f-tipo-cons"><option>Valoración médica</option><option>Urgencia</option><option>Accidente de trabajo</option><option>Aplicación de tratamiento</option></select></div>
   </div>
   <div class="g4">
-    <div class="fi"><label>T/A</label><input type="text" id="f-ta" placeholder="120/80"></div>
-    <div class="fi"><label>FC</label><input type="number" id="f-fc" placeholder="72"></div>
-    <div class="fi"><label>FR</label><input type="number" id="f-fr" placeholder="16"></div>
-    <div class="fi"><label>Temp °C</label><input type="number" step="0.1" id="f-temp" placeholder="36.5"></div>
-    <div class="fi"><label>SpO₂ %</label><input type="number" id="f-spo2" placeholder="98"></div>
-    <div class="fi"><label>Glucosa</label><input type="number" id="f-glucosa" placeholder="100"></div>
-    <div class="fi"><label>Peso kg</label><input type="number" step="0.1" id="f-peso" placeholder="70" oninput="calcIMCf()"></div>
-    <div class="fi"><label>Talla m</label><input type="number" step="0.01" id="f-talla" placeholder="1.65" oninput="calcIMCf()"></div>
+  <div class="fi"><label>T/A</label><input type="text" id="f-ta" placeholder="120/80"></div>
+  <div class="fi"><label>FC</label><input type="number" id="f-fc" placeholder="72"></div>
+  <div class="fi"><label>Temp °C</label><input type="number" step="0.1" id="f-temp" placeholder="36.5"></div>
+  <div class="fi"><label>SpO₂ %</label><input type="number" id="f-spo2" placeholder="98"></div>
+  <div class="fi"><label>Glucosa</label><input type="number" id="f-glucosa" placeholder="100"></div>
+
+  <!-- PESO -->
+  <div class="fi">
+    <label>Peso kg</label>
+    <input type="number" step="0.1" id="f-peso" placeholder="70" oninput="calcularIMC()">
   </div>
+
+  <!-- TALLA (NUEVO) -->
+  <div class="fi">
+    <label>Talla m</label>
+    <input type="number" step="0.01" id="f-talla" placeholder="1.70" oninput="calcularIMC()">
+  </div>
+
+  <!-- IMC (RESULTADO) -->
+  <div class="fi">
+    <label>IMC</label>
+    <input type="number" id="f-imc" readonly placeholder="0.00">
+  </div>
+</div>
   <div class="fi"><label>Motivo de consulta</label><textarea id="f-motivo" rows="2" placeholder="Motivo de la consulta..."></textarea></div>
   <div class="fi"><label>Enfermedades crónicas</label><input type="text" id="f-cronicos" value="${cr||''}" placeholder="DM2, HTA, asma..."></div>
   <div class="fi"><label>Alergias</label><input type="text" id="f-alergias" value="${al||''}" placeholder="Alergias conocidas..."></div>
@@ -2652,5 +2684,31 @@ document.addEventListener('DOMContentLoaded', () => {
   initSimpleSearches();
 });
 if(localStorage.getItem('so_dark')==='1') document.documentElement.classList.add('dark');
+
+  function calcularIMC(){
+  const peso = parseFloat(document.getElementById('f-peso')?.value);
+  const talla = parseFloat(document.getElementById('f-talla')?.value);
+  const imcInput = document.getElementById('f-imc');
+  const needle = document.querySelector('.imc-needle');
+
+  if(!peso || !talla || talla === 0){
+    if(imcInput) imcInput.value = '';
+    if(needle) needle.style.left = '0%';
+    return;
+  }
+
+  const imc = peso / (talla * talla);
+
+  if(imcInput){
+    imcInput.value = imc.toFixed(2);
+  }
+
+  // 🔥 mover aguja (0 a 40 IMC)
+  if(needle){
+    let porcentaje = (imc / 40) * 100;
+    if(porcentaje > 100) porcentaje = 100;
+    needle.style.left = porcentaje + '%';
+  }
+}
 </script>
 </body></html>
