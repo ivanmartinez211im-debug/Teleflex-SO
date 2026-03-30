@@ -1579,11 +1579,21 @@ function renderExpAlertasLocal(noEmp){
 // PANEL CAPTURA DINÁMICO
 // ════════════════════════════════════════════════════════════════
 function renderPanelCaptura(emp){
+  // Show alerts (frecuencia + alergias)
+  const ca=document.getElementById('cap-alertas');
+  if(ca){
+    const frec=calcFrecuencia(emp.noEmp);
+    const al=getAlergias(emp.noEmp);
+    let alertHTML='';
+    if(al) alertHTML+=`<div style="background:#FEF9C3;border:1.5px solid #FDE047;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-weight:700;color:#854D0E;font-size:12px">⚠️ Alergias: ${al}</div>`;
+    if(frec>=8) alertHTML+=`<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px"><strong style="color:#B91C1C">🔴 Alta frecuencia:</strong> ${frec} consultas en los últimos 30 días.</div>`;
+    else if(frec>=4) alertHTML+=`<div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px"><strong style="color:#92400E">🟡 Frecuencia moderada:</strong> ${frec} consultas en los últimos 30 días.</div>`;
+    else if(frec>=1) alertHTML+=`<div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px"><strong style="color:#166534">🟢 Frecuencia normal:</strong> ${frec} consulta(s) recientes.</div>`;
+    ca.innerHTML=alertHTML;
+  }
+  // Render form
   const panelConsulta=document.getElementById('cap-form-container');
-  const panelHistorial=document.getElementById('panel-captura');
-  const html=USER.rol==='enfermeria'?buildFormEnf(emp):USER.rol==='medico'?buildFormMed(emp):'';
-  if(panelConsulta) panelConsulta.innerHTML=html;
-  if(panelHistorial) panelHistorial.innerHTML=html;
+  if(panelConsulta) panelConsulta.innerHTML=USER.rol==='medico'?buildCapFormMed(emp):buildCapFormEnf(emp);
 }
 function getAlergias(noEmp){const lc=String(noEmp||'').toLowerCase();return[...new Set(CONS.filter(c=>String(c.noEmp||'').toLowerCase()===lc).flatMap(c=>(c.alergias||'').split(/[,;]+/).map(x=>x.trim()).filter(Boolean)))].join(', ');}
 function getCronicos(noEmp){const lc=String(c=>{}).toString();const lc2=String(noEmp||'').toLowerCase();return[...new Set(CONS.filter(c=>String(c.noEmp||'').toLowerCase()===lc2).flatMap(c=>(c.cronicos||'').split(/[,;]+/).map(x=>x.trim()).filter(Boolean)))].join(', ');}
@@ -2463,6 +2473,136 @@ document.addEventListener('click',function(e){
     if(d) d.style.display='none';
   }
 });
+
+
+// ════════════════════════════════════════════════════════════════
+// CAPTURA — BUSCADOR Y ALERTAS
+// ════════════════════════════════════════════════════════════════
+
+function mostrarCaptura(emp){
+  if(!emp)return;
+  _capEmp=emp;
+  _empActual=emp;
+
+  // Update header
+  const ch=document.getElementById('cap-emp-header');
+  if(ch) ch.innerHTML=`
+    <div class="cap-header" style="background:var(--sf3);border:1.5px solid var(--bor);border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-weight:800;font-size:14px">${emp.nombre} <span style="font-size:11px;font-weight:400;color:var(--tx3)">· No.${emp.noEmp}</span></div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:2px">${emp.planta||'—'} · ${emp.depto||'—'} · ${emp.puesto||'—'}</div>
+      </div>
+      <button class="btn btn-gh btn-sm" onclick="renderCaptura()">✕ Cambiar</button>
+    </div>`;
+
+  // Frecuency alerts
+  const ca=document.getElementById('cap-alertas');
+  if(ca){
+    const frec=calcFrecuencia(emp.noEmp);
+    const al=getAlergias(emp.noEmp);
+    let alertHTML='';
+    if(al) alertHTML+=`<div style="background:#FEF9C3;border:1.5px solid #FDE047;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-weight:700;color:#854D0E;font-size:12px">⚠️ Alergias registradas: ${al}</div>`;
+    if(frec>=8) alertHTML+=`<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px"><strong style="color:#B91C1C">🔴 Alta frecuencia:</strong> ${frec} consultas en los últimos 30 días — requiere evaluación médica.</div>`;
+    else if(frec>=4) alertHTML+=`<div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px"><strong style="color:#92400E">🟡 Frecuencia moderada:</strong> ${frec} consultas en los últimos 30 días.</div>`;
+    else if(frec>=1) alertHTML+=`<div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px"><strong style="color:#166534">🟢 Frecuencia normal:</strong> ${frec} consulta(s) en los últimos 30 días.</div>`;
+    ca.innerHTML=alertHTML;
+  }
+
+  // Render form
+  const cf=document.getElementById('cap-form-container');
+  if(cf) cf.innerHTML = USER.rol==='medico' ? buildCapFormMed(emp) : buildCapFormEnf(emp);
+}
+
+function calcFrecuencia(noEmp){
+  if(!noEmp||!CONS) return 0;
+  const hace30=new Date();
+  hace30.setDate(hace30.getDate()-30);
+  return CONS.filter(c=>{
+    if(String(c.noEmp)!==String(noEmp)) return false;
+    const f=String(c.fecha||'');
+    let dt=null;
+    try{ dt=f.includes('/')?new Date(f.split('/').reverse().join('-')+'T12:00'):new Date(f+'T12:00'); }catch(e){}
+    return dt&&dt>=hace30;
+  }).length;
+}
+
+function buscarParaCaptura(noEmp, nombre, planta, depto, puesto, nss, genero, turno){
+  const emp={noEmp:String(noEmp),nombre,planta,depto,puesto,nss,genero,turno};
+  mostrarCaptura(emp);
+}
+
+// ════════════════════════════════════════════════════════════════
+// IMPRESIÓN — ventana nueva con fallback iframe
+// ════════════════════════════════════════════════════════════════
+
+function abrirImpresion(titulo, contenido){
+  // Try popup first
+  const w=window.open('','_blank');
+  if(w&&!w.closed){
+    w.document.write(wrapImpresion(titulo,contenido));
+    w.document.close();
+    setTimeout(()=>{try{w.focus();w.print();}catch(e){}},800);
+    return;
+  }
+  // Fallback: modal con iframe
+  let mo=document.getElementById('mo-print');
+  if(!mo){
+    mo=document.createElement('div');
+    mo.id='mo-print';
+    mo.className='ov';
+    mo.innerHTML=`<div class="mo" style="max-width:900px;width:95%;height:90vh;display:flex;flex-direction:column;padding:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--bor)">
+        <strong id="mo-print-title">Imprimir</strong>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="document.getElementById('mo-print-frame').contentWindow.print()">🖨️ Imprimir</button>
+          <button class="btn btn-gh btn-sm" onclick="closeModal('mo-print')">✕</button>
+        </div>
+      </div>
+      <iframe id="mo-print-frame" style="flex:1;border:none;width:100%"></iframe>
+    </div>`;
+    document.body.appendChild(mo);
+  }
+  document.getElementById('mo-print-title').textContent=titulo;
+  mo.classList.add('open');
+  const frame=document.getElementById('mo-print-frame');
+  frame.srcdoc=wrapImpresion(titulo,contenido);
+}
+
+function wrapImpresion(titulo,contenido){
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}<\/title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:11.5px;color:#0F172A;padding:20px}
+    @page{size:letter;margin:12mm 14mm}
+    @media print{.no-print{display:none!important}}
+    .page{max-width:720px;margin:0 auto}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+    .sec{margin-bottom:14px}
+    .sec-t{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748B;border-bottom:1.5px solid #E2E8F0;padding-bottom:4px;margin-bottom:8px}
+    .f label{font-size:9px;color:#94A3B8;text-transform:uppercase;display:block;margin-bottom:2px}
+    .f span{font-size:12px;font-weight:600;display:block;min-height:16px}
+    .pac{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px;margin-bottom:14px}
+    .sig-area{display:flex;justify-content:space-between;margin-top:40px;gap:20px}
+    .sig-box{text-align:center;min-width:180px}
+    .sig-line{border-top:1.5px solid #0F2942;padding-top:5px;font-size:11px;font-weight:700;margin-top:30px}
+    .btn-print{position:fixed;bottom:16px;right:16px;background:#0F2942;color:#fff;border:none;padding:11px 22px;border-radius:9px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+    table{width:100%;border-collapse:collapse}
+    th{background:#0F2942;color:#fff;padding:7px 10px;text-align:left;font-size:10px}
+    td{padding:7px 10px;border-bottom:1px solid #E2E8F0;font-size:11px}
+    tr:nth-child(even) td{background:#F8FAFC}
+  <\/style><\/head><body>
+  <div class="page">${contenido}<\/div>
+  <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / PDF<\/button>
+  <\/body><\/html>`;
+}
+
+// Override abrirVentanaImpresion to use new robust function
+function abrirVentanaImpresion(titulo,contenido){
+  abrirImpresion(titulo,contenido);
+}
+
 
 document.addEventListener('DOMContentLoaded', () => {
   cargarUsuariosLogin();
